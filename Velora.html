@@ -1,0 +1,1718 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+<title>WORLD // EXPLORER</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;900&family=Rajdhani:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+<style>
+  :root{
+    --bg:#020409;
+    --panel-bg:rgba(8,14,24,0.62);
+    --panel-border:rgba(120,190,255,0.18);
+    --accent:#5ad1ff;
+    --accent-dim:rgba(90,209,255,0.35);
+    --text-soft:rgba(220,235,245,0.78);
+    --text-strong:#eaf6ff;
+    --ocean-a:#07131d;
+    --ocean-b:#0c2436;
+    --ocean-c:#061420;
+    --land:#2c4552;
+    --land-hover:#5ad1ff;
+    --land-selected:#8fe8ff;
+    --border-line: rgba(190,228,255,0.55);
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  html,body{
+    width:100%; height:100%; overflow:hidden; background:var(--bg);
+    font-family:'Rajdhani',sans-serif; color:var(--text-strong);
+    -webkit-tap-highlight-color: transparent;
+    touch-action: none;
+  }
+  #bg-canvas{ position:fixed; inset:0; width:100%; height:100%; display:block; }
+
+  /* ---------- GLOBE STAGE ---------- */
+  #globe-stage{
+    position:fixed; inset:0; display:flex; align-items:center; justify-content:center;
+    z-index:5; transform:scale(0.14); opacity:0; filter:blur(10px);
+    transition: transform 3.8s cubic-bezier(.16,.84,.2,1), opacity 3.4s ease, filter 3.4s ease;
+  }
+  #globe-stage.revealed{ transform:scale(1); opacity:1; filter:blur(0px); }
+  #globe-stage.entering{ transform:scale(1.16); }
+  #globe-halo{
+    position:absolute; width:min(78vmin,660px); height:min(78vmin,660px); border-radius:50%;
+    background:radial-gradient(circle at 50% 50%, rgba(90,180,230,0.18) 0%, rgba(90,180,230,0.06) 45%, transparent 72%);
+    filter:blur(6px); pointer-events:none;
+  }
+  #globe{ width:min(72vmin,600px); height:min(72vmin,600px); display:block; cursor:grab; touch-action:none; }
+  #globe:active{ cursor:grabbing; }
+  .land-shape{ fill:var(--land); stroke:rgba(4,10,16,0.4); stroke-width:0.4; transition:fill .22s ease; }
+  .land-shape.hovered{ fill:var(--land-hover); }
+  .land-shape.selected{ fill:var(--land-selected); filter:drop-shadow(0 0 6px rgba(140,235,255,0.85)); }
+  .border-mesh{ fill:none; stroke:var(--border-line); stroke-width:0.55; stroke-linejoin:round; pointer-events:none; }
+  .graticule{ fill:none; stroke:rgba(160,210,240,0.09); stroke-width:0.35; pointer-events:none; }
+  .sphere-outline{ fill:none; stroke:rgba(160,215,245,0.35); stroke-width:1; pointer-events:none; }
+
+  /* ---------- LOADING ---------- */
+  #loading-screen{
+    position:fixed; inset:0; z-index:100; background:radial-gradient(ellipse at 50% 50%, #060b14 0%, #010203 75%);
+    display:flex; flex-direction:column; align-items:center; justify-content:center; gap:22px;
+    transition:opacity 1.1s ease, visibility 1.1s ease;
+  }
+  #loading-screen.hidden{ opacity:0; visibility:hidden; pointer-events:none; }
+  .brand-mark{
+    font-family:'Orbitron',sans-serif; font-weight:700; font-size:clamp(20px,3vw,26px);
+    letter-spacing:6px; color:var(--text-strong); opacity:0.92;
+  }
+  .brand-mark span{ color:var(--accent); }
+  .load-bar-track{ width:min(320px,70vw); height:2px; background:rgba(255,255,255,0.08); position:relative; overflow:hidden; border-radius:2px;}
+  .load-bar-fill{ position:absolute; left:0; top:0; bottom:0; width:0%; background:linear-gradient(90deg,var(--accent),#8fe8ff); box-shadow:0 0 12px var(--accent); transition:width .35s ease; }
+  .load-status{ font-size:12px; letter-spacing:3px; text-transform:uppercase; color:var(--text-soft); font-weight:500; min-height:16px; }
+  .load-pct{ font-family:'Orbitron',sans-serif; font-size:11px; color:var(--accent); letter-spacing:2px; }
+
+  /* ---------- START / INTRO OVERLAY ---------- */
+  #start-overlay{
+    position:fixed; inset:0; z-index:60; display:flex; flex-direction:column; align-items:center; justify-content:flex-end;
+    padding-bottom:9vh; pointer-events:none; opacity:0; transition:opacity 1.4s ease;
+    text-align:center; background:linear-gradient(to top, rgba(0,3,8,0.55) 0%, rgba(0,3,8,0) 38%);
+  }
+  #start-overlay.visible{ opacity:1; pointer-events:auto; }
+  .eyebrow{ font-size:11px; letter-spacing:6px; text-transform:uppercase; color:var(--accent); opacity:0.85; margin-bottom:14px; font-weight:600; }
+  .title-main{
+    font-family:'Orbitron',sans-serif; font-weight:900; font-size:clamp(30px,7vw,68px);
+    letter-spacing:clamp(4px,1.2vw,10px); line-height:1.05; color:var(--text-strong);
+    text-shadow:0 0 40px rgba(90,209,255,0.35);
+  }
+  .title-main .slash{ color:var(--accent); margin:0 10px; opacity:0.7; font-weight:500;}
+  .subtitle{ margin-top:16px; font-size:clamp(13px,1.6vw,17px); letter-spacing:2px; color:var(--text-soft); font-weight:400; }
+  .cta-btn{
+    margin-top:38px; position:relative; padding:16px 38px; font-family:'Orbitron',sans-serif; font-size:13px;
+    letter-spacing:4px; color:var(--text-strong); background:rgba(90,209,255,0.06);
+    border:1px solid var(--accent-dim); border-radius:2px; cursor:pointer; overflow:hidden;
+    backdrop-filter:blur(8px); -webkit-backdrop-filter:blur(8px);
+    transition:transform .35s cubic-bezier(.2,.9,.3,1), box-shadow .35s ease, background .35s ease, border-color .35s ease;
+  }
+  .cta-btn:hover{ transform:scale(1.045); background:rgba(90,209,255,0.14); border-color:rgba(140,220,255,0.75); box-shadow:0 0 34px rgba(90,209,255,0.35); }
+  .cta-btn:active{ transform:scale(0.99); }
+  .cta-btn::after{ content:""; position:absolute; inset:0; background:linear-gradient(120deg,transparent,rgba(255,255,255,0.18),transparent); transform:translateX(-120%); transition:transform .8s ease; }
+  .cta-btn:hover::after{ transform:translateX(120%); }
+
+  /* ---------- TOP BAR / EXPLORE UI ---------- */
+  #ui-layer{ position:fixed; inset:0; z-index:40; pointer-events:none; opacity:0; transition:opacity 1s ease; }
+  #ui-layer.visible{ opacity:1; }
+  #topbar{ position:absolute; top:0; left:0; right:0; display:flex; align-items:center; justify-content:space-between; padding:18px 22px; pointer-events:auto; }
+  #logo{ font-family:'Orbitron',sans-serif; font-weight:700; font-size:15px; letter-spacing:4px; color:var(--text-strong); }
+  #logo span{ color:var(--accent); }
+  #search-wrap{ position:relative; width:min(320px,42vw); }
+  #search-input{
+    width:100%; padding:11px 16px; font-family:'Rajdhani',sans-serif; font-size:14px; letter-spacing:1px;
+    color:var(--text-strong); background:var(--panel-bg); border:1px solid var(--panel-border); border-radius:6px;
+    backdrop-filter:blur(14px); -webkit-backdrop-filter:blur(14px); outline:none; transition:border-color .3s ease;
+  }
+  #search-input::placeholder{ color:rgba(220,235,245,0.4); }
+  #search-input:focus{ border-color:var(--accent-dim); }
+  #suggestions{
+    position:absolute; top:calc(100% + 8px); left:0; right:0; background:var(--panel-bg);
+    border:1px solid var(--panel-border); border-radius:6px; backdrop-filter:blur(16px); -webkit-backdrop-filter:blur(16px);
+    max-height:280px; overflow-y:auto; display:none; box-shadow:0 12px 30px rgba(0,0,0,0.45);
+  }
+  #suggestions.show{ display:block; }
+  .suggestion-item{ display:flex; align-items:center; gap:10px; padding:10px 14px; cursor:pointer; font-size:13.5px; letter-spacing:0.5px; color:var(--text-soft); transition:background .15s ease; }
+  .suggestion-item img{ width:20px; height:14px; object-fit:cover; border-radius:2px; opacity:0.9; }
+  .suggestion-item:hover, .suggestion-item.active{ background:rgba(90,209,255,0.12); color:var(--text-strong); }
+  #nav-controls{ position:absolute; bottom:26px; left:50%; transform:translateX(-50%); display:flex; gap:10px; pointer-events:auto; }
+  .nav-btn{
+    width:42px; height:42px; border-radius:50%; background:var(--panel-bg); border:1px solid var(--panel-border);
+    color:var(--text-soft); display:flex; align-items:center; justify-content:center; cursor:pointer;
+    backdrop-filter:blur(14px); -webkit-backdrop-filter:blur(14px); font-size:16px; transition:all .25s ease;
+  }
+  .nav-btn:hover{ border-color:var(--accent-dim); color:var(--accent); background:rgba(90,209,255,0.1); transform:translateY(-2px); }
+  #hint-panel{
+    position:absolute; bottom:82px; left:50%; transform:translateX(-50%) translateY(8px); width:min(280px,80vw);
+    background:var(--panel-bg); border:1px solid var(--panel-border); border-radius:8px; padding:14px 16px;
+    backdrop-filter:blur(14px); -webkit-backdrop-filter:blur(14px); font-size:12.5px; line-height:1.7; color:var(--text-soft);
+    opacity:0; visibility:hidden; pointer-events:none; transition:all .3s ease;
+  }
+  #hint-panel.show{ opacity:1; visibility:visible; transform:translateX(-50%) translateY(0); pointer-events:auto; }
+  #hint-panel b{ color:var(--accent); font-weight:600; }
+
+  /* ---------- TOOLTIP ---------- */
+  #tooltip{
+    position:fixed; z-index:45; pointer-events:none; display:flex; align-items:center; gap:8px;
+    padding:7px 12px; background:rgba(8,14,24,0.85); border:1px solid var(--panel-border); border-radius:5px;
+    font-size:13px; letter-spacing:0.5px; color:var(--text-strong); opacity:0; transition:opacity .12s ease;
+    backdrop-filter:blur(10px); transform:translate(14px,-50%);
+  }
+  #tooltip.show{ opacity:1; }
+  #tooltip img{ width:18px; height:13px; object-fit:cover; border-radius:2px; }
+
+  /* ---------- INFO PANEL ---------- */
+  #info-panel{
+    position:fixed; top:0; right:0; height:100%; width:min(380px,88vw); z-index:50;
+    background:var(--panel-bg); border-left:1px solid var(--panel-border); backdrop-filter:blur(22px); -webkit-backdrop-filter:blur(22px);
+    padding:26px; transform:translateX(100%); transition:transform .55s cubic-bezier(.16,.9,.28,1);
+    overflow-y:auto; pointer-events:auto;
+  }
+  #info-panel.open{ transform:translateX(0); }
+  #panel-close{
+    position:absolute; top:20px; right:20px; width:32px; height:32px; border-radius:50%; background:rgba(255,255,255,0.05);
+    border:1px solid var(--panel-border); color:var(--text-soft); display:flex; align-items:center; justify-content:center;
+    cursor:pointer; font-size:15px; transition:all .2s ease;
+  }
+  #panel-close:hover{ color:var(--accent); border-color:var(--accent-dim); }
+  .accent-line{ width:40px; height:2px; background:var(--accent); margin-bottom:16px; box-shadow:0 0 10px var(--accent); }
+  #panel-flag{ width:100%; max-width:220px; border-radius:6px; box-shadow:0 8px 24px rgba(0,0,0,0.5); border:1px solid var(--panel-border); margin-bottom:18px; }
+  #panel-eyebrow{ font-size:11px; letter-spacing:4px; color:var(--accent); text-transform:uppercase; margin-bottom:6px; font-weight:600; }
+  #panel-name{ font-family:'Orbitron',sans-serif; font-size:clamp(20px,3vw,26px); font-weight:700; margin-bottom:20px; line-height:1.25; }
+  .stat-row{ display:flex; justify-content:space-between; align-items:baseline; padding:13px 0; border-top:1px solid rgba(255,255,255,0.07); }
+  .stat-label{ font-size:11px; letter-spacing:2.5px; text-transform:uppercase; color:rgba(220,235,245,0.45); font-weight:600; }
+  .stat-value{ font-size:15px; font-weight:600; color:var(--text-strong); text-align:right; }
+  .panel-note{ margin-top:20px; font-size:12px; color:rgba(220,235,245,0.4); line-height:1.6; }
+
+  @media (max-width:720px){
+    #info-panel{ top:auto; bottom:0; right:0; width:100%; height:auto; max-height:72vh; border-left:none; border-top:1px solid var(--panel-border); border-radius:16px 16px 0 0; transform:translateY(100%); }
+    #info-panel.open{ transform:translateY(0); }
+    #search-wrap{ width:52vw; }
+    #topbar{ padding:14px 14px; }
+  }
+
+  #error-banner{
+    position:fixed; bottom:0; left:0; right:0; z-index:90; background:rgba(120,30,30,0.85); color:#fff;
+    font-size:12.5px; letter-spacing:1px; padding:10px 16px; text-align:center; display:none; backdrop-filter:blur(8px);
+  }
+  #error-banner.show{ display:block; }
+
+  ::-webkit-scrollbar{ width:6px; }
+  ::-webkit-scrollbar-thumb{ background:rgba(90,209,255,0.25); border-radius:4px; }
+
+  /* ====== WORLD EXPLORER // ENHANCED UI ====== */
+  body::before{
+    content:""; position:fixed; inset:0; pointer-events:none; z-index:2;
+    background:
+      linear-gradient(rgba(120,200,255,.025) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(120,200,255,.025) 1px, transparent 1px);
+    background-size:48px 48px;
+    mask-image:radial-gradient(circle at center, #000 0%, transparent 74%);
+  }
+
+  #topbar{
+    padding:20px clamp(16px,3vw,38px);
+  }
+
+  #logo{
+    padding:10px 13px;
+    border:1px solid rgba(120,190,255,.12);
+    background:rgba(5,12,20,.3);
+    border-radius:9px;
+    box-shadow:0 10px 35px rgba(0,0,0,.18);
+    backdrop-filter:blur(12px);
+  }
+
+  #search-wrap{ width:min(390px,46vw); }
+  .search-line{
+    position:relative; display:flex; align-items:center;
+    background:rgba(7,15,26,.68);
+    border:1px solid rgba(120,190,255,.18);
+    border-radius:10px;
+    box-shadow:0 12px 35px rgba(0,0,0,.25);
+    backdrop-filter:blur(18px);
+    transition:.25s ease;
+  }
+  .search-line:focus-within{
+    border-color:rgba(90,209,255,.58);
+    box-shadow:0 0 0 3px rgba(90,209,255,.08), 0 15px 42px rgba(0,0,0,.35);
+  }
+  .search-icon{
+    width:42px; text-align:center; font-size:22px; color:var(--accent);
+    opacity:.8; transform:translateY(-1px);
+  }
+  #search-input{
+    border:0!important; background:transparent!important; box-shadow:none!important;
+    padding:12px 14px 12px 0;
+  }
+
+  .suggestion-item{
+    padding:12px 14px;
+    border-bottom:1px solid rgba(255,255,255,.04);
+  }
+  .suggestion-item:last-child{ border-bottom:0; }
+
+  #explore-badge{
+    position:absolute; top:79px; left:clamp(16px,3vw,38px);
+    display:flex; align-items:center; gap:8px;
+    padding:7px 11px; border-radius:999px;
+    background:rgba(5,12,20,.5); border:1px solid rgba(120,190,255,.11);
+    color:rgba(220,235,245,.52); font-size:9px; letter-spacing:2px;
+    backdrop-filter:blur(10px);
+  }
+  .pulse-dot{
+    width:6px;height:6px;border-radius:50%;background:var(--accent);
+    box-shadow:0 0 10px var(--accent); animation:pulse 1.8s infinite ease-in-out;
+  }
+  @keyframes pulse{50%{opacity:.35;transform:scale(.65)}}
+
+  .nav-btn{
+    font-family:'Orbitron',sans-serif;
+    background:rgba(5,12,20,.68);
+    box-shadow:0 10px 24px rgba(0,0,0,.25);
+  }
+
+  #hint-panel{
+    border-radius:12px;
+    box-shadow:0 18px 50px rgba(0,0,0,.34);
+  }
+
+  #info-panel{
+    width:min(440px,92vw);
+    padding:28px;
+    background:
+      radial-gradient(circle at 85% 0%, rgba(90,209,255,.09), transparent 38%),
+      linear-gradient(180deg, rgba(9,17,29,.92), rgba(4,9,16,.91));
+    box-shadow:-24px 0 70px rgba(0,0,0,.42);
+  }
+
+  .panel-topline{
+    display:flex; align-items:flex-start; justify-content:space-between; gap:18px;
+    padding-right:44px;
+  }
+  .panel-code{
+    margin-top:3px; font-family:'Orbitron',sans-serif; font-size:9px;
+    letter-spacing:2px; color:rgba(220,235,245,.33);
+  }
+  .status-pill{
+    padding:6px 9px; border-radius:999px;
+    border:1px solid rgba(90,209,255,.2);
+    background:rgba(90,209,255,.05); color:var(--accent);
+    font-size:9px; letter-spacing:2px; white-space:nowrap;
+  }
+  .hero-flag-wrap{
+    position:relative; margin:20px 0 17px; border-radius:12px; overflow:hidden;
+    border:1px solid rgba(120,190,255,.17);
+    background:linear-gradient(135deg,rgba(255,255,255,.04),rgba(255,255,255,.01));
+  }
+  .hero-flag-wrap::after{
+    content:""; position:absolute; inset:0; pointer-events:none;
+    background:linear-gradient(120deg,transparent 15%,rgba(255,255,255,.11) 50%,transparent 85%);
+    transform:translateX(-110%); animation:flagSweep 4.5s infinite ease-in-out;
+  }
+  @keyframes flagSweep{12%,100%{transform:translateX(110%)}}
+  #panel-flag{
+    display:block; width:100%; max-width:none; aspect-ratio:16/9; object-fit:cover;
+    margin:0; border:0; border-radius:0; box-shadow:none;
+  }
+  #panel-name{
+    font-size:clamp(24px,3vw,31px); margin-bottom:4px;
+  }
+  .panel-subtitle{
+    font-size:12px; letter-spacing:1.2px; color:rgba(220,235,245,.46);
+    margin-bottom:20px;
+  }
+
+  .capital-callout{
+    display:inline-flex; align-items:center; gap:7px;
+    margin:-9px 0 16px; padding:6px 9px; border-radius:999px;
+    border:1px solid rgba(90,209,255,.17);
+    background:rgba(90,209,255,.04);
+    color:rgba(90,209,255,.75); font:600 8px 'Orbitron',sans-serif; letter-spacing:1.3px;
+  }
+  .capital-callout-dot{
+    width:6px; height:6px; border-radius:50%; background:var(--accent);
+    box-shadow:0 0 8px var(--accent);
+  }
+  .fact-grid{
+    display:grid; grid-template-columns:1fr 1fr; gap:9px;
+    margin:0 0 18px;
+  }
+  .fact-card{
+    padding:13px 12px; min-height:72px; border-radius:10px;
+    background:rgba(255,255,255,.027);
+    border:1px solid rgba(255,255,255,.055);
+  }
+  .fact-card span{
+    display:block; font-size:8px; letter-spacing:2px; color:rgba(220,235,245,.34);
+    margin-bottom:7px;
+  }
+  .fact-card strong{
+    display:block; font-size:15px; line-height:1.15; color:var(--text-strong);
+  }
+
+  .profile-section{
+    margin-top:18px; padding-top:16px;
+    border-top:1px solid rgba(255,255,255,.07);
+  }
+  .section-title{
+    margin-bottom:8px; color:var(--accent);
+    font-family:'Orbitron',sans-serif; font-size:9px; letter-spacing:2px;
+  }
+  .detail-row{
+    display:grid; grid-template-columns:40% 60%; gap:10px; align-items:start;
+    padding:8px 0;
+  }
+  .detail-row span{
+    color:rgba(220,235,245,.37); font-size:11px; letter-spacing:1px;
+  }
+  .detail-row b{
+    color:rgba(240,249,255,.91); font-size:12px; text-align:right; line-height:1.45;
+  }
+
+  .tag-row{ display:flex; flex-wrap:wrap; gap:7px; }
+  .mini-tag{
+    padding:7px 9px; border-radius:7px; border:1px solid rgba(255,255,255,.08);
+    color:rgba(220,235,245,.43); font-size:9px; letter-spacing:1.5px;
+  }
+  .mini-tag.active{
+    color:var(--accent); border-color:rgba(90,209,255,.22);
+    background:rgba(90,209,255,.055);
+  }
+
+  .panel-actions{
+    display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:20px;
+  }
+  .panel-action{
+    display:flex; align-items:center; justify-content:center;
+    min-height:40px; padding:10px;
+    border-radius:8px; border:1px solid rgba(120,190,255,.15);
+    background:rgba(90,209,255,.035); color:rgba(235,248,255,.84);
+    font:600 10px 'Orbitron',sans-serif; letter-spacing:1px;
+    text-decoration:none; cursor:pointer; transition:.2s ease;
+  }
+  .panel-action:hover{
+    color:var(--accent); border-color:rgba(90,209,255,.4);
+    background:rgba(90,209,255,.08); transform:translateY(-1px);
+  }
+  .panel-random-btn{ font-family:'Orbitron',sans-serif; }
+
+  .panel-note{
+    margin-top:16px; padding:11px 12px; border-radius:9px;
+    background:rgba(255,255,255,.025);
+    border:1px solid rgba(255,255,255,.045);
+    color:rgba(220,235,245,.34); font-size:10.5px; line-height:1.55;
+  }
+
+  @media (max-width:720px){
+    #explore-badge{ top:64px; }
+    #info-panel{ padding:22px 20px 22px; max-height:82vh; }
+    .fact-card{ min-height:66px; }
+    .panel-actions{ grid-template-columns:1fr 1fr; }
+  }
+
+
+  /* ===== CAPITAL MARKER ===== */
+  .capital-marker{ pointer-events:none; }
+  .capital-ping{
+    fill:none; stroke:var(--accent); stroke-width:1.2;
+    opacity:.72; animation:capitalPulse 1.55s infinite ease-out;
+  }
+  .capital-core{
+    fill:#eaf8ff; stroke:var(--accent); stroke-width:1.8;
+    filter:drop-shadow(0 0 7px rgba(90,209,255,.95));
+  }
+  .capital-label{
+    font-family:'Rajdhani',sans-serif; font-size:11px; font-weight:700;
+    letter-spacing:1.35px; fill:var(--text-strong);
+    paint-order:stroke; stroke:rgba(2,6,12,.92); stroke-width:3px;
+  }
+  .capital-line{
+    stroke:rgba(90,209,255,.65); stroke-width:.65; opacity:.9;
+  }
+  @keyframes capitalPulse{
+    0%{r:3;opacity:.75}
+    75%{r:12;opacity:0}
+    100%{r:12;opacity:0}
+  }
+  .land-shape.selected{
+    fill:var(--land-selected);
+    filter:drop-shadow(0 0 9px rgba(140,235,255,.92));
+    stroke:rgba(220,250,255,.85);
+    stroke-width:.75;
+  }
+  #globe.capital-focus{ filter:drop-shadow(0 0 20px rgba(90,209,255,.08)); }
+
+
+  /* =========================================================
+     FULL COUNTRY FOCUS MODE
+  ========================================================= */
+  #country-focus{
+    position:fixed; inset:0; z-index:80;
+    opacity:0; visibility:hidden; pointer-events:none;
+    background:
+      radial-gradient(circle at 50% 44%, #123b72 0%, #092750 34%, #041a38 72%, #021329 100%);
+    color:#e9f5ff;
+    overflow:hidden;
+    transition:opacity .16s ease, visibility .16s ease;
+  }
+  #country-focus.open{
+    opacity:1; visibility:visible; pointer-events:auto;
+  }
+  .focus-bg-grid{
+    position:absolute; inset:-20%;
+    opacity:.34;
+    background:
+      linear-gradient(rgba(117,193,255,.11) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(117,193,255,.11) 1px, transparent 1px);
+    background-size:42px 42px;
+    transform:perspective(900px) rotateX(58deg) scale(1.45) translateY(22%);
+    transform-origin:center bottom;
+  }
+  .focus-orbit{
+    position:absolute; left:50%; top:46%;
+    width:min(78vw,900px); aspect-ratio:1;
+    border:1px solid rgba(113,196,255,.15); border-radius:50%;
+    transform:translate(-50%,-50%) rotate(-15deg);
+  }
+  .focus-orbit-a{ transform:translate(-50%,-50%) rotate(-18deg) scaleY(.34); }
+  .focus-orbit-b{ transform:translate(-50%,-50%) rotate(52deg) scaleY(.34); }
+  .focus-top{
+    position:absolute; top:24px; left:30px; right:30px;
+    display:flex; align-items:center; justify-content:space-between;
+    z-index:3;
+  }
+  .focus-kicker{
+    font:700 10px 'Orbitron',sans-serif; letter-spacing:3px;
+    color:rgba(180,224,255,.68);
+  }
+  .focus-close{
+    width:42px; height:42px; border-radius:50%;
+    border:1px solid rgba(136,211,255,.24); background:rgba(5,27,53,.55);
+    color:#eaf7ff; font:400 24px 'Rajdhani',sans-serif;
+    cursor:pointer; backdrop-filter:blur(12px);
+    transition:.2s ease;
+  }
+  .focus-close:hover{
+    background:#77d5ff; color:#03152b; transform:rotate(90deg);
+  }
+  .focus-content{
+    position:absolute; inset:90px 6vw 42px;
+    display:grid; grid-template-rows:auto minmax(0,1fr) auto;
+    align-items:center;
+  }
+  .focus-meta{
+    display:flex; align-items:center; gap:12px; justify-content:center;
+  }
+  .focus-iso{
+    font:700 10px 'Orbitron',sans-serif; letter-spacing:3px;
+    color:#dff4ff; padding:7px 11px; border:1px solid rgba(127,210,255,.22);
+    border-radius:999px; background:rgba(3,24,50,.5);
+  }
+  .focus-continent{
+    font:600 10px 'Rajdhani',sans-serif; letter-spacing:1.7px; text-transform:uppercase;
+    color:rgba(176,215,241,.62);
+  }
+
+  .country-stage{
+    position:relative; width:min(86vw,1000px); height:100%;
+    margin:auto; display:flex; align-items:center; justify-content:center;
+  }
+  #focus-country-svg{
+    width:min(78vw,820px); height:min(56vh,540px);
+    overflow:visible;
+  }
+  #focus-country-path{
+    fill:#48bfff;
+    stroke:#bceeff;
+    stroke-width:6;
+    stroke-linejoin:round;
+    stroke-linecap:round;
+    filter:
+      drop-shadow(0 0 12px rgba(71,201,255,.62))
+      drop-shadow(0 20px 36px rgba(0,0,0,.35));
+    vector-effect:non-scaling-stroke;
+    transform-origin:center;
+  }
+  .country-glow{
+    position:absolute; width:min(48vw,520px); height:min(40vw,420px);
+    border-radius:50%;
+    background:radial-gradient(circle, rgba(49,190,255,.30), transparent 68%);
+    filter:blur(15px); pointer-events:none;
+  }
+  #focus-capital-dot{
+    fill:#ffffff; stroke:#49c9ff; stroke-width:4;
+    filter:drop-shadow(0 0 12px rgba(98,221,255,.8));
+  }
+  #focus-capital-ring{
+    fill:none; stroke:#111a22; stroke-width:2;
+    opacity:.55; animation:focusCapitalPulse 1.7s infinite ease-out;
+  }
+  #focus-capital-line{
+    stroke:#8fe5ff; stroke-width:1.4; opacity:.8;
+  }
+  #focus-capital-label{
+    fill:#f1fbff; font:700 13px 'Orbitron',sans-serif;
+    letter-spacing:2px; paint-order:stroke; stroke:#08264a; stroke-width:5px;
+  }
+  .focus-country-name{
+    position:absolute; left:50%; bottom:8%;
+    transform:translateX(-50%);
+    font:900 clamp(27px,5vw,66px) 'Orbitron',sans-serif;
+    letter-spacing:clamp(4px,1vw,10px); color:#111a22;
+    white-space:nowrap; text-align:center;
+  }
+  .focus-info{
+    display:grid; grid-template-columns:repeat(4, minmax(130px,1fr));
+    width:min(850px,92vw); margin:auto; gap:10px;
+  }
+  .focus-info-item{
+    padding:13px 16px; border-top:1px solid rgba(20,35,48,.14);
+    background:rgba(255,255,255,.18); backdrop-filter:blur(8px);
+  }
+  .focus-info-item span{
+    display:block; font:700 8px 'Orbitron',sans-serif; letter-spacing:2px; color:#7a8790;
+    margin-bottom:5px;
+  }
+  .focus-info-item strong{
+    display:block; font:700 14px 'Rajdhani',sans-serif; color:#16222c;
+    line-height:1.25;
+  }
+  @keyframes focusCapitalPulse{
+    0%{r:9;opacity:.58}
+    75%{r:27;opacity:0}
+    100%{r:27;opacity:0}
+  }
+
+  /* Make the regular globe fade away elegantly underneath focus mode. */
+  body.focus-active #globe-stage{
+    opacity:0!important;
+    transform:scale(.92)!important;
+    filter:blur(4px)!important;
+  }
+  body.focus-active #ui-layer,
+  body.focus-active #tooltip{
+    opacity:0!important;
+    pointer-events:none!important;
+  }
+
+  @media(max-width:720px){
+    .focus-top{ top:16px; left:16px; right:16px; }
+    .focus-content{ inset:75px 16px 24px; }
+    .focus-info{ grid-template-columns:1fr 1fr; }
+    #focus-country-svg{ width:88vw; height:52vh; }
+    .focus-country-name{ bottom:10%; }
+  }
+
+
+  /* Cinematic dive transition */
+  #country-focus::before{
+    content:""; position:absolute; inset:-20%;
+    background:radial-gradient(circle at 50% 50%, rgba(90,205,255,.30), transparent 36%, rgba(0,0,0,.18) 68%);
+    opacity:0; transform:scale(.35);
+    pointer-events:none;
+  }
+  #country-focus.dive-in::before{
+    animation:focusDive .95s cubic-bezier(.16,.84,.18,1) forwards;
+  }
+  #country-focus.dive-in .focus-content{
+    animation:focusContentDive .95s cubic-bezier(.16,.84,.18,1) forwards;
+  }
+  @keyframes focusDive{
+    0%{opacity:.1;transform:scale(.18)}
+    45%{opacity:.95;transform:scale(.62)}
+    100%{opacity:0;transform:scale(1.25)}
+  }
+  @keyframes focusContentDive{
+    0%{opacity:0;transform:scale(.72)}
+    48%{opacity:.55;transform:scale(.9)}
+    100%{opacity:1;transform:scale(1)}
+  }
+
+  .focus-back-label{
+    position:absolute; top:74px; left:30px;
+    padding:6px 10px; border:1px solid rgba(128,210,255,.13);
+    border-radius:999px; color:rgba(180,222,244,.50);
+    background:rgba(3,23,48,.30);
+    font:600 8px 'Orbitron',sans-serif; letter-spacing:2px;
+    backdrop-filter:blur(8px);
+  }
+
+  #focus-close::after{
+    content:"BACK TO GLOBE";
+    position:absolute; right:52px; top:50%; transform:translateY(-50%);
+    white-space:nowrap; color:rgba(179,222,246,.52);
+    font:600 8px 'Orbitron',sans-serif; letter-spacing:1.5px;
+    pointer-events:none;
+  }
+
+  @media(max-width:720px){
+    .focus-back-label{left:16px;top:68px;font-size:7px;}
+    #focus-close::after{display:none;}
+  }
+
+</style>
+</head>
+<body>
+
+<canvas id="bg-canvas"></canvas>
+
+<div id="globe-stage">
+  <div id="globe-halo"></div>
+  <svg id="globe" viewBox="0 0 600 600">
+    <defs>
+      <radialGradient id="oceanGrad" cx="35%" cy="32%" r="75%">
+        <stop offset="0%" stop-color="var(--ocean-b)"/>
+        <stop offset="55%" stop-color="var(--ocean-a)"/>
+        <stop offset="100%" stop-color="var(--ocean-c)"/>
+      </radialGradient>
+    </defs>
+    <circle id="sphere-fill" cx="300" cy="300" r="255" fill="url(#oceanGrad)"></circle>
+    <path id="graticule-path" class="graticule"></path>
+    <g id="land-layer"></g>
+    <path id="border-path" class="border-mesh"></path>
+    <g id="capital-layer"></g>
+    <circle id="sphere-outline" class="sphere-outline" cx="300" cy="300" r="255"></circle>
+  </svg>
+</div>
+
+<div id="loading-screen">
+  <div class="brand-mark">WORLD <span>//</span> EXPLORER</div>
+  <div class="load-bar-track"><div class="load-bar-fill" id="load-bar-fill"></div></div>
+  <div class="load-status" id="load-status">INITIALIZING WORLD DATA...</div>
+  <div class="load-pct" id="load-pct">0%</div>
+</div>
+
+<div id="start-overlay">
+  <div class="eyebrow">A Cinematic Earth Experience</div>
+  <div class="title-main">WORLD <span class="slash">//</span> EXPLORER</div>
+  <div class="subtitle">Navigate 200+ mapped nations • profiles • geography • live country data</div>
+  <button class="cta-btn" id="cta-btn">BEGIN EXPLORATION →</button>
+</div>
+
+<div id="ui-layer">
+  <div id="topbar">
+    <div id="logo">WORLD <span>//</span> EXPLORER</div>
+    <div id="search-wrap">
+      <div class="search-line">
+        <span class="search-icon">⌕</span>
+        <input id="search-input" type="text" placeholder="Search country, capital, code..." autocomplete="off" />
+      </div>
+      <div id="suggestions"></div>
+    </div>
+  </div>
+
+  <div id="hint-panel">
+    <div><b>Drag</b> to rotate the globe</div>
+    <div><b>Scroll / Pinch</b> to zoom</div>
+    <div><b>Click / Tap</b> a country to enter full-screen focus mode</div>
+    <div><b>Search</b> by country, capital or ISO code</div>
+    <div><b>N</b> random country · <b>R</b> reset · <b>/</b> search</div>
+  </div>
+
+  <div id="nav-controls">
+    <button class="nav-btn" id="btn-search" title="Search" aria-label="Search">⌕</button>
+    <button class="nav-btn" id="btn-reset" title="Reset View" aria-label="Reset view">◎</button>
+    <button class="nav-btn" id="btn-random" title="Random Country" aria-label="Random country">✦</button>
+    <button class="nav-btn" id="btn-info" title="Instructions" aria-label="Instructions">?</button>
+  </div>
+
+  <div id="explore-badge">
+    <span class="pulse-dot"></span>
+    <span id="explore-count">WORLD DATABASE // LOADING</span>
+  </div>
+</div>
+
+<div id="tooltip"><img id="tooltip-flag" src="" alt=""/><span id="tooltip-name"></span></div>
+
+<aside id="info-panel" aria-label="Country profile">
+  <button id="panel-close" aria-label="Close country profile">×</button>
+  <div class="panel-topline">
+    <div>
+      <div id="panel-eyebrow">COUNTRY PROFILE</div>
+      <div class="panel-code" id="panel-code">---</div>
+    </div>
+    <div class="status-pill" id="panel-status">WORLD</div>
+  </div>
+
+  <div class="hero-flag-wrap">
+    <img id="panel-flag" src="" alt="" />
+  </div>
+
+  <div class="accent-line"></div>
+  <div id="panel-name">—</div>
+  <div class="panel-subtitle" id="panel-subtitle">—</div>
+  <div class="capital-callout"><span class="capital-callout-dot"></span><span>CAPITAL HIGHLIGHT ACTIVE</span></div>
+
+  <div class="fact-grid">
+    <div class="fact-card"><span>CAPITAL</span><strong id="panel-capital">—</strong></div>
+    <div class="fact-card"><span>POPULATION</span><strong id="panel-population">—</strong></div>
+    <div class="fact-card"><span>AREA</span><strong id="panel-area">—</strong></div>
+    <div class="fact-card"><span>CONTINENT</span><strong id="panel-continent">—</strong></div>
+  </div>
+
+  <section class="profile-section">
+    <div class="section-title">IDENTITY</div>
+    <div class="detail-row"><span>Region</span><b id="panel-region">—</b></div>
+    <div class="detail-row"><span>Subregion</span><b id="panel-subregion">—</b></div>
+    <div class="detail-row"><span>Languages</span><b id="panel-languages">—</b></div>
+    <div class="detail-row"><span>Currency</span><b id="panel-currency">—</b></div>
+    <div class="detail-row"><span>Internet domain</span><b id="panel-tld">—</b></div>
+  </section>
+
+  <section class="profile-section">
+    <div class="section-title">GEOGRAPHY & TIME</div>
+    <div class="detail-row"><span>Time zones</span><b id="panel-timezones">—</b></div>
+    <div class="detail-row"><span>Coordinates</span><b id="panel-coordinates">—</b></div>
+    <div class="detail-row"><span>Driving side</span><b id="panel-driving">—</b></div>
+    <div class="detail-row"><span>Week starts</span><b id="panel-week">—</b></div>
+    <div class="detail-row"><span>Land borders</span><b id="panel-borders">—</b></div>
+  </section>
+
+  <section class="profile-section">
+    <div class="section-title">STATUS</div>
+    <div class="tag-row">
+      <span class="mini-tag" id="tag-member">UN MEMBER</span>
+      <span class="mini-tag" id="tag-independent">INDEPENDENT</span>
+    </div>
+  </section>
+
+  <div class="panel-actions">
+    <a id="panel-map" class="panel-action" href="#" target="_blank" rel="noopener">OPEN MAP ↗</a>
+    <button id="panel-random" class="panel-action panel-random-btn">RANDOM COUNTRY</button>
+  </div>
+
+  <div class="panel-note" id="panel-note"></div>
+</aside>
+
+<div id="error-banner"></div>
+
+<div id="country-focus" aria-hidden="true">
+  <div class="focus-bg-grid"></div>
+  <div class="focus-orbit focus-orbit-a"></div>
+  <div class="focus-orbit focus-orbit-b"></div>
+  <div class="focus-top">
+    <div class="focus-kicker">COUNTRY // FOCUS MODE</div>
+    <button id="focus-close" class="focus-close" aria-label="Back to globe" title="Back to globe">×</button>
+  </div>
+  <div class="focus-back-label">ESC / CLICK × // RETURN TO GLOBE</div>
+
+  <div class="focus-content">
+    <div class="focus-meta">
+      <div class="focus-iso" id="focus-iso">---</div>
+      <div class="focus-continent" id="focus-continent">—</div>
+    </div>
+
+    <div class="country-stage">
+      <div class="country-glow"></div>
+      <svg id="focus-country-svg" viewBox="0 0 900 650" aria-label="Selected country outline">
+        <path id="focus-country-path"></path>
+        <circle id="focus-capital-dot" cx="0" cy="0" r="7"></circle>
+        <circle id="focus-capital-ring" cx="0" cy="0" r="20"></circle>
+        <line id="focus-capital-line" x1="0" y1="0" x2="0" y2="0"></line>
+        <text id="focus-capital-label" x="0" y="0">CAPITAL</text>
+      </svg>
+      <div class="focus-country-name" id="focus-country-name">COUNTRY</div>
+    </div>
+
+    <div class="focus-info">
+      <div class="focus-info-item">
+        <span>CAPITAL</span><strong id="focus-capital">—</strong>
+      </div>
+      <div class="focus-info-item">
+        <span>POPULATION</span><strong id="focus-population">—</strong>
+      </div>
+      <div class="focus-info-item">
+        <span>AREA</span><strong id="focus-area">—</strong>
+      </div>
+      <div class="focus-info-item">
+        <span>REGION</span><strong id="focus-region">—</strong>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+<script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
+<script src="https://cdn.jsdelivr.net/npm/topojson-client@3"></script>
+
+<script>
+/* =========================================================
+   BUILT-IN COUNTRY DATABASE
+   Country profile data is stored directly in this HTML file.
+   The live REST Countries request can enhance it when online.
+========================================================= */
+const BUILT_IN_COUNTRY_DB = {"AFG":{"a3":"AFG","a2":"AF","name":"Afghanistan","capital":"Kabul","population":26023100,"area":652230,"region":"Asia","subregion":"Southern Asia","languages":["ps","uz","tk"],"currencies":["AFN"],"timezones":["UTC+04:30"],"tld":[".af","افغانستان."],"callingCodes":["93"],"borders":["IRN","PAK","TKM","UZB","TJK","CHN"],"capitalLatLng":[34.526011,69.177684],"latlng":[33,65],"demonym":"Afghan","nativeName":"افغانستان","altSpellings":["AF","Afġānistān"]},"ALB":{"a3":"ALB","a2":"AL","name":"Albania","capital":"Tirana","population":2895947,"area":28748,"region":"Europe","subregion":"Southern Europe","languages":["sq"],"currencies":["ALL"],"timezones":["UTC+01:00"],"tld":[".al"],"callingCodes":["355"],"borders":["MNE","GRC","MKD","KOS"],"capitalLatLng":[41.326873,19.818791],"latlng":[41,20],"demonym":"Albanian","nativeName":"Shqipëria","altSpellings":["AL","Shqipëri","Shqipëria","Shqipnia"]},"DZA":{"a3":"DZA","a2":"DZ","name":"Algeria","capital":"Algiers","population":38700000,"area":2381741,"region":"Africa","subregion":"Northern Africa","languages":["ar"],"currencies":["DZD"],"timezones":["UTC+01:00"],"tld":[".dz","الجزائر."],"callingCodes":["213"],"borders":["TUN","LBY","NER","ESH","MRT","MLI","MAR"],"capitalLatLng":[36.775361,3.060188],"latlng":[28,3],"demonym":"Algerian","nativeName":"الجزائر","altSpellings":["DZ","Dzayer","Algérie"]},"ASM":{"a3":"ASM","a2":"AS","name":"American Samoa","capital":"Pago Pago","population":55519,"area":199,"region":"Oceania","subregion":"Polynesia","languages":["en","sm"],"currencies":["USD"],"timezones":[],"tld":[".as"],"callingCodes":["1684"],"borders":[],"capitalLatLng":[-14.275479,-170.70483],"latlng":[-14.33333333,-170],"demonym":"American Samoan","nativeName":"American Samoa","altSpellings":["AS","Amerika Sāmoa","Amelika Sāmoa","Sāmoa Amelika"]},"AGO":{"a3":"AGO","a2":"AO","name":"Angola","capital":"Luanda","population":24383301,"area":1246700,"region":"Africa","subregion":"Middle Africa","languages":["pt"],"currencies":["AOA"],"timezones":["UTC+01:00"],"tld":[".ao"],"callingCodes":["244"],"borders":["COG","COD","ZMB","NAM"],"capitalLatLng":[-8.82727,13.243951],"latlng":[-12.5,18.5],"demonym":"Angolan","nativeName":"Angola","altSpellings":["AO","República de Angola","ʁɛpublika de an'ɡɔla"]},"AIA":{"a3":"AIA","a2":"AI","name":"Anguilla","capital":"The Valley","population":13452,"area":91,"region":"Americas","subregion":"Caribbean","languages":["en"],"currencies":["XCD"],"timezones":[],"tld":[".ai"],"callingCodes":["1264"],"borders":[],"capitalLatLng":[41.559572,-98.980548],"latlng":[18.25,-63.16666666],"demonym":"Anguillian","nativeName":"Anguilla","altSpellings":["AI"]},"ATG":{"a3":"ATG","a2":"AG","name":"Antigua and Barbuda","capital":"Saint John's","population":86295,"area":442,"region":"Americas","subregion":"Caribbean","languages":["en"],"currencies":["XCD"],"timezones":["UTC−04:00"],"tld":[".ag"],"callingCodes":["1268"],"borders":[],"capitalLatLng":[47.561701,-52.715149],"latlng":[17.05,-61.8],"demonym":"Antiguan,Barbudan","nativeName":"Antigua and Barbuda","altSpellings":["AG"]},"ARG":{"a3":"ARG","a2":"AR","name":"Argentina","capital":"Buenos Aires","population":42669500,"area":2780400,"region":"Americas","subregion":"South America","languages":["es","gn"],"currencies":["ARS"],"timezones":["UTC−03:00"],"tld":[".ar"],"callingCodes":["54"],"borders":["BOL","BRA","CHL","PRY","URY"],"capitalLatLng":[-34.607568,-58.437089],"latlng":[-34,-64],"demonym":"Argentinean","nativeName":"Argentina","altSpellings":["AR","Argentine Republic","República Argentina"]},"ARM":{"a3":"ARM","a2":"AM","name":"Armenia","capital":"Yerevan","population":3009800,"area":29743,"region":"Asia","subregion":"Western Asia","languages":["hy","ru"],"currencies":["AMD"],"timezones":["UTC+04:00"],"tld":[".am"],"callingCodes":["374"],"borders":["AZE","GEO","IRN","TUR"],"capitalLatLng":[40.177612,44.512585],"latlng":[40,45],"demonym":"Armenian","nativeName":"Հայաստան","altSpellings":["AM","Hayastan","Republic of Armenia","Հայաստանի Հանրապետություն"]},"ABW":{"a3":"ABW","a2":"AW","name":"Aruba","capital":"Oranjestad","population":101484,"area":180,"region":"Americas","subregion":"Caribbean","languages":["nl","pa"],"currencies":["AWG"],"timezones":[],"tld":[".aw"],"callingCodes":["297"],"borders":[],"capitalLatLng":[12.526874,-70.035684],"latlng":[12.5,-69.96666666],"demonym":"Aruban","nativeName":"Aruba","altSpellings":["AW"]},"AUS":{"a3":"AUS","a2":"AU","name":"Australia","capital":"Canberra","population":23696900,"area":7692024,"region":"Oceania","subregion":"Australia and New Zealand","languages":["en"],"currencies":["AUD"],"timezones":["UTC+05:00","UTC+06:30","UTC+07:00","UTC+08:00","UTC+09:30","UTC+10:00","UTC+10:30","UTC+11:30"],"tld":[".au"],"callingCodes":["61"],"borders":[],"capitalLatLng":[-35.297591,149.101268],"latlng":[-27,133],"demonym":"Australian","nativeName":"Australia","altSpellings":["AU"]},"AUT":{"a3":"AUT","a2":"AT","name":"Austria","capital":"Vienna","population":8527230,"area":83871,"region":"Europe","subregion":"Western Europe","languages":["de"],"currencies":["EUR"],"timezones":["UTC+01:00"],"tld":[".at"],"callingCodes":["43"],"borders":["CZE","DEU","HUN","ITA","LIE","SVK","SVN","CHE"],"capitalLatLng":[48.208354,16.372504],"latlng":[47.33333333,13.33333333],"demonym":"Austrian","nativeName":"Österreich","altSpellings":["AT","Österreich","Osterreich","Oesterreich"]},"AZE":{"a3":"AZE","a2":"AZ","name":"Azerbaijan","capital":"Baku","population":9552500,"area":86600,"region":"Asia","subregion":"Western Asia","languages":["az","hy"],"currencies":["AZN"],"timezones":["UTC+04:00"],"tld":[".az"],"callingCodes":["994"],"borders":["ARM","GEO","IRN","RUS","TUR"],"capitalLatLng":[40.375443,49.832675],"latlng":[40.5,47.5],"demonym":"Azerbaijani","nativeName":"Azərbaycan","altSpellings":["AZ","Republic of Azerbaijan","Azərbaycan Respublikası"]},"BHS":{"a3":"BHS","a2":"BS","name":"The Bahamas","capital":"Nassau","population":319031,"area":13943,"region":"Americas","subregion":"Caribbean","languages":["en"],"currencies":["BSD"],"timezones":["UTC−05:00"],"tld":[".bs"],"callingCodes":["1242"],"borders":[],"capitalLatLng":[25.078346,-77.338333],"latlng":[24.25,-76],"demonym":"Bahamian","nativeName":"Bahamas","altSpellings":["BS","Commonwealth of the Bahamas"]},"BHR":{"a3":"BHR","a2":"BH","name":"Bahrain","capital":"Manama","population":1316500,"area":765,"region":"Asia","subregion":"Western Asia","languages":["ar"],"currencies":["BHD"],"timezones":["UTC+03:00"],"tld":[".bh"],"callingCodes":["973"],"borders":[],"capitalLatLng":[26.223504,50.582244],"latlng":[26,50.55],"demonym":"Bahraini","nativeName":"‏البحرين","altSpellings":["BH","Kingdom of Bahrain","Mamlakat al-Baḥrayn"]},"BGD":{"a3":"BGD","a2":"BD","name":"Bangladesh","capital":"Dhaka","population":157486000,"area":147570,"region":"Asia","subregion":"Southern Asia","languages":["bn"],"currencies":["BDT"],"timezones":["UTC+06:00"],"tld":[".bd"],"callingCodes":["880"],"borders":["MMR","IND"],"capitalLatLng":[23.759357,90.378814],"latlng":[24,90],"demonym":"Bangladeshi","nativeName":"বাংলাদেশ","altSpellings":["BD","People's Republic of Bangladesh","Gônôprôjatôntri Bangladesh"]},"BRB":{"a3":"BRB","a2":"BB","name":"Barbados","capital":"Bridgetown","population":285000,"area":430,"region":"Americas","subregion":"Caribbean","languages":["en"],"currencies":["BBD"],"timezones":["UTC−04:00"],"tld":[".bb"],"callingCodes":["1246"],"borders":[],"capitalLatLng":[13.097783,-59.618418],"latlng":[13.16666666,-59.53333333],"demonym":"Barbadian","nativeName":"Barbados","altSpellings":["BB"]},"BLR":{"a3":"BLR","a2":"BY","name":"Belarus","capital":"Minsk","population":9475100,"area":207600,"region":"Europe","subregion":"Eastern Europe","languages":["be","ru"],"currencies":["BYR"],"timezones":["UTC+03:00"],"tld":[".by"],"callingCodes":["375"],"borders":["LVA","LTU","POL","RUS","UKR"],"capitalLatLng":[53.902334,27.561879],"latlng":[53,28],"demonym":"Belarusian","nativeName":"Белару́сь","altSpellings":["BY","Bielaruś","Republic of Belarus","Белоруссия","Республика Беларусь","Belorussiya","Respublika Belarus’"]},"BEL":{"a3":"BEL","a2":"BE","name":"Belgium","capital":"Brussels","population":11225469,"area":30528,"region":"Europe","subregion":"Western Europe","languages":["nl","fr","de"],"currencies":["EUR"],"timezones":["UTC+01:00"],"tld":[".be"],"callingCodes":["32"],"borders":["FRA","DEU","LUX","NLD"],"capitalLatLng":[50.846557,4.351697],"latlng":[50.83333333,4],"demonym":"Belgian","nativeName":"België","altSpellings":["BE","België","Belgie","Belgien","Belgique","Kingdom of Belgium","Koninkrijk België","Royaume de Belgique","Königreich Belgien"]},"BLZ":{"a3":"BLZ","a2":"BZ","name":"Belize","capital":"Belmopan","population":349728,"area":22966,"region":"Americas","subregion":"Central America","languages":["en","es"],"currencies":["BZD"],"timezones":["UTC−06:00"],"tld":[".bz"],"callingCodes":["501"],"borders":["GTM","MEX"],"capitalLatLng":[17.250199,-88.770018],"latlng":[17.25,-88.75],"demonym":"Belizean","nativeName":"Belize","altSpellings":["BZ"]},"BEN":{"a3":"BEN","a2":"BJ","name":"Benin","capital":"Porto-Novo","population":9988068,"area":112622,"region":"Africa","subregion":"Western Africa","languages":["fr"],"currencies":["XOF"],"timezones":["UTC+01:00"],"tld":[".bj"],"callingCodes":["229"],"borders":["BFA","NER","NGA","TGO"],"capitalLatLng":[6.499072,2.625336],"latlng":[9.5,2.25],"demonym":"Beninese","nativeName":"Bénin","altSpellings":["BJ","Republic of Benin","République du Bénin"]},"BMU":{"a3":"BMU","a2":"BM","name":"Bermuda","capital":"Hamilton","population":64237,"area":54,"region":"Americas","subregion":"Northern America","languages":["en"],"currencies":["BMD"],"timezones":[],"tld":[".bm"],"callingCodes":["1441"],"borders":[],"capitalLatLng":[43.25608,-79.872858],"latlng":[32.33333333,-64.75],"demonym":"Bermudian","nativeName":"Bermuda","altSpellings":["BM","The Islands of Bermuda","The Bermudas","Somers Isles"]},"BTN":{"a3":"BTN","a2":"BT","name":"Bhutan","capital":"Thimphu","population":755030,"area":38394,"region":"Asia","subregion":"Southern Asia","languages":["dz"],"currencies":["BTN","INR"],"timezones":["UTC+06:00"],"tld":[".bt"],"callingCodes":["975"],"borders":["CHN","IND"],"capitalLatLng":[27.472762,89.629548],"latlng":[27.5,90.5],"demonym":"Bhutanese","nativeName":"ʼbrug-yul","altSpellings":["BT","Kingdom of Bhutan"]},"BOL":{"a3":"BOL","a2":"BO","name":"Bolivia","capital":"Sucre","population":10027254,"area":1098581,"region":"Americas","subregion":"South America","languages":["es","ay","qu"],"currencies":["BOB","BOV"],"timezones":["UTC−04:00"],"tld":[".bo"],"callingCodes":["591"],"borders":["ARG","BRA","CHL","PRY","PER"],"capitalLatLng":[-19.047725,-65.259431],"latlng":[-17,-65],"demonym":"Bolivian","nativeName":"Bolivia","altSpellings":["BO","Buliwya","Wuliwya","Plurinational State of Bolivia","Estado Plurinacional de Bolivia","Buliwya Mamallaqta","Wuliwya Suyu","Tetã Volívia"]},"BIH":{"a3":"BIH","a2":"BA","name":"Bosnia and Herzegovina","capital":"Sarajevo","population":3791622,"area":51209,"region":"Europe","subregion":"Southern Europe","languages":["bs","hr","sr"],"currencies":["BAM"],"timezones":["UTC+01:00"],"tld":[".ba"],"callingCodes":["387"],"borders":["HRV","MNE","SRB"],"capitalLatLng":[43.851977,18.386687],"latlng":[44,18],"demonym":"Bosnian,Herzegovinian","nativeName":"Bosna i Hercegovina","altSpellings":["BA","Bosnia-Herzegovina","Босна и Херцеговина"]},"BWA":{"a3":"BWA","a2":"BW","name":"Botswana","capital":"Gaborone","population":2024904,"area":582000,"region":"Africa","subregion":"Southern Africa","languages":["en","tn"],"currencies":["BWP"],"timezones":["UTC+02:00"],"tld":[".bw"],"callingCodes":["267"],"borders":["NAM","ZAF","ZMB","ZWE"],"capitalLatLng":[-24.658136,25.908847],"latlng":[-22,24],"demonym":"Motswana","nativeName":"Botswana","altSpellings":["BW","Republic of Botswana","Lefatshe la Botswana"]},"BRA":{"a3":"BRA","a2":"BR","name":"Brazil","capital":"Brasília","population":203586000,"area":8515767,"region":"Americas","subregion":"South America","languages":["pt"],"currencies":["BRL"],"timezones":["UTC−05:00","UTC−04:00","UTC−03:00","UTC−02:00"],"tld":[".br"],"callingCodes":["55"],"borders":["ARG","BOL","COL","GUF","GUY","PRY","PER","SUR","URY","VEN"],"capitalLatLng":[-10.333333,-53.2],"latlng":[-10,-55],"demonym":"Brazilian","nativeName":"Brasil","altSpellings":["BR","Brasil","Federative Republic of Brazil","República Federativa do Brasil"]},"IOT":{"a3":"IOT","a2":"IO","name":"British Indian Ocean Territory","capital":"Diego Garcia","population":3000,"area":60,"region":"Africa","subregion":"Eastern Africa","languages":["en"],"currencies":["USD"],"timezones":[],"tld":[".io"],"callingCodes":["246"],"borders":[],"capitalLatLng":[-7.338358,72.471815],"latlng":[-6,71.5],"demonym":"Indian","nativeName":"British Indian Ocean Territory","altSpellings":["IO"]},"BRN":{"a3":"BRN","a2":"BN","name":"Brunei","capital":"Bandar Seri Begawan","population":393372,"area":5765,"region":"Asia","subregion":"South-Eastern Asia","languages":["ms"],"currencies":["BND"],"timezones":["UTC+08:00"],"tld":[".bn"],"callingCodes":["673"],"borders":["MYS"],"capitalLatLng":[4.889545,114.941757],"latlng":[4.5,114.66666666],"demonym":"Bruneian","nativeName":"Negara Brunei Darussalam","altSpellings":["BN","Nation of Brunei"," the Abode of Peace"]},"BGR":{"a3":"BGR","a2":"BG","name":"Bulgaria","capital":"Sofia","population":7245677,"area":110879,"region":"Europe","subregion":"Eastern Europe","languages":["bg"],"currencies":["BGN"],"timezones":["UTC+02:00"],"tld":[".bg"],"callingCodes":["359"],"borders":["GRC","MKD","ROU","SRB","TUR"],"capitalLatLng":[-15.25384,48.256216],"latlng":[43,25],"demonym":"Bulgarian","nativeName":"България","altSpellings":["BG","Republic of Bulgaria","Република България"]},"BFA":{"a3":"BFA","a2":"BF","name":"Burkina Faso","capital":"Ouagadougou","population":17322796,"area":272967,"region":"Africa","subregion":"Western Africa","languages":["fr","ff"],"currencies":["XOF"],"timezones":["UTC"],"tld":[".bf"],"callingCodes":["226"],"borders":["BEN","CIV","GHA","MLI","NER","TGO"],"capitalLatLng":[12.368187,-1.527094],"latlng":[13,-2],"demonym":"Burkinabe","nativeName":"Burkina Faso","altSpellings":["BF"]},"BDI":{"a3":"BDI","a2":"BI","name":"Burundi","capital":"Bujumbura","population":9530434,"area":27834,"region":"Africa","subregion":"Eastern Africa","languages":["fr","rn"],"currencies":["BIF"],"timezones":["UTC+02:00"],"tld":[".bi"],"callingCodes":["257"],"borders":["COD","RWA","TZA"],"capitalLatLng":[-3.363812,29.367503],"latlng":[-3.5,30],"demonym":"Burundian","nativeName":"Burundi","altSpellings":["BI","Republic of Burundi","Republika y'Uburundi","République du Burundi"]},"KHM":{"a3":"KHM","a2":"KH","name":"Cambodia","capital":"Phnom Penh","population":15184116,"area":181035,"region":"Asia","subregion":"South-Eastern Asia","languages":["km"],"currencies":["KHR"],"timezones":["UTC+07:00"],"tld":[".kh"],"callingCodes":["855"],"borders":["LAO","THA","VNM"],"capitalLatLng":[11.568271,104.922443],"latlng":[13,105],"demonym":"Cambodian","nativeName":"Kâmpŭchéa","altSpellings":["KH","Kingdom of Cambodia"]},"CMR":{"a3":"CMR","a2":"CM","name":"Cameroon","capital":"Yaoundé","population":20386799,"area":475442,"region":"Africa","subregion":"Middle Africa","languages":["en","fr"],"currencies":["XAF"],"timezones":["UTC+01:00"],"tld":[".cm"],"callingCodes":["237"],"borders":["CAF","TCD","COG","GNQ","GAB","NGA"],"capitalLatLng":[3.868987,11.521334],"latlng":[6,12],"demonym":"Cameroonian","nativeName":"Cameroon","altSpellings":["CM","Republic of Cameroon","République du Cameroun"]},"CAN":{"a3":"CAN","a2":"CA","name":"Canada","capital":"Ottawa","population":35540419,"area":9984670,"region":"Americas","subregion":"Northern America","languages":["en","fr"],"currencies":["CAD"],"timezones":["UTC−08:00","UTC−07:00","UTC−06:00","UTC−05:00","UTC−04:00","UTC−03:30"],"tld":[".ca"],"callingCodes":["1"],"borders":["USA"],"capitalLatLng":[45.421106,-75.690308],"latlng":[60,-95],"demonym":"Canadian","nativeName":"Canada","altSpellings":["CA"]},"CPV":{"a3":"CPV","a2":"CV","name":"Cape Verde","capital":"Praia","population":518467,"area":4033,"region":"Africa","subregion":"Western Africa","languages":["pt"],"currencies":["CVE"],"timezones":["UTC−01:00"],"tld":[".cv"],"callingCodes":["238"],"borders":[],"capitalLatLng":[14.916017,-23.509613],"latlng":[16,-24],"demonym":"Cape Verdian","nativeName":"Cabo Verde","altSpellings":["CV","Republic of Cabo Verde","República de Cabo Verde"]},"CYM":{"a3":"CYM","a2":"KY","name":"Cayman Islands","capital":"George Town","population":55456,"area":264,"region":"Americas","subregion":"Caribbean","languages":["en"],"currencies":["KYD"],"timezones":[],"tld":[".ky"],"callingCodes":["1345"],"borders":[],"capitalLatLng":[5.414568,100.329804],"latlng":[19.5,-80.5],"demonym":"Caymanian","nativeName":"Cayman Islands","altSpellings":["KY"]},"CAF":{"a3":"CAF","a2":"CF","name":"Central African Republic","capital":"Bangui","population":4709000,"area":622984,"region":"Africa","subregion":"Middle Africa","languages":["fr","sg"],"currencies":["XAF"],"timezones":["UTC+01:00"],"tld":[".cf"],"callingCodes":["236"],"borders":["CMR","TCD","COD","COG","SSD","SDN"],"capitalLatLng":[4.390715,18.550913],"latlng":[7,21],"demonym":"Central African","nativeName":"Ködörösêse tî Bêafrîka","altSpellings":["CF","Central African Republic","République centrafricaine"]},"TCD":{"a3":"TCD","a2":"TD","name":"Chad","capital":"N'Djamena","population":13211000,"area":1284000,"region":"Africa","subregion":"Middle Africa","languages":["fr","ar"],"currencies":["XAF"],"timezones":["UTC+01:00"],"tld":[".td"],"callingCodes":["235"],"borders":["CMR","CAF","LBY","NER","NGA","SSD"],"capitalLatLng":[12.119154,15.050276],"latlng":[15,19],"demonym":"Chadian","nativeName":"Tchad","altSpellings":["TD","Tchad","Republic of Chad","République du Tchad"]},"CHL":{"a3":"CHL","a2":"CL","name":"Chile","capital":"Santiago","population":17819054,"area":756102,"region":"Americas","subregion":"South America","languages":["es"],"currencies":["CLF","CLP"],"timezones":["UTC−06:00","UTC−04:00"],"tld":[".cl"],"callingCodes":["56"],"borders":["ARG","BOL","PER"],"capitalLatLng":[9.869479,-83.798075],"latlng":[-30,-71],"demonym":"Chilean","nativeName":"Chile","altSpellings":["CL","Republic of Chile","República de Chile"]},"CHN":{"a3":"CHN","a2":"CN","name":"China","capital":"Beijing","population":1367110000,"area":9640011,"region":"Asia","subregion":"Eastern Asia","languages":["zh"],"currencies":["CNY"],"timezones":["UTC+08:00"],"tld":[".cn"],"callingCodes":["86"],"borders":["AFG","BTN","MMR","HKG","IND","KAZ","PRK","KGZ","LAO","MAC","MNG","PAK","RUS","TJK","VNM"],"capitalLatLng":[39.906217,116.391276],"latlng":[35,105],"demonym":"Chinese","nativeName":"中国","altSpellings":["CN","Zhōngguó","Zhongguo","Zhonghua","People's Republic of China","中华人民共和国","Zhōnghuá Rénmín Gònghéguó"]},"CXR":{"a3":"CXR","a2":"CX","name":"Christmas Island","capital":"Flying Fish Cove","population":2072,"area":135,"region":"Oceania","subregion":"Australia and New Zealand","languages":["en"],"currencies":["AUD"],"timezones":[],"tld":[".cx"],"callingCodes":["61"],"borders":[],"capitalLatLng":[-10.426665,105.668672],"latlng":[-10.5,105.66666666],"demonym":"Christmas Island","nativeName":"Christmas Island","altSpellings":["CX","Territory of Christmas Island"]},"CCK":{"a3":"CCK","a2":"CC","name":"Cocos (Keeling) Islands","capital":"West Island","population":550,"area":14,"region":"Oceania","subregion":"Australia and New Zealand","languages":["en"],"currencies":["AUD"],"timezones":[],"tld":[".cc"],"callingCodes":["61"],"borders":[],"capitalLatLng":[-12.189848,96.830449],"latlng":[-12.5,96.83333333],"demonym":"Cocos Islander","nativeName":"Cocos (Keeling) Islands","altSpellings":["CC","Territory of the Cocos (Keeling) Islands","Keeling Islands"]},"COL":{"a3":"COL","a2":"CO","name":"Colombia","capital":"Bogotá","population":47907800,"area":1141748,"region":"Americas","subregion":"South America","languages":["es"],"currencies":["COP"],"timezones":["UTC−05:00"],"tld":[".co"],"callingCodes":["57"],"borders":["BRA","ECU","PAN","PER","VEN"],"capitalLatLng":[4.59808,-74.076044],"latlng":[4,-72],"demonym":"Colombian","nativeName":"Colombia","altSpellings":["CO","Republic of Colombia","República de Colombia"]},"COM":{"a3":"COM","a2":"KM","name":"Comoros","capital":"Moroni","population":763952,"area":1862,"region":"Africa","subregion":"Eastern Africa","languages":["ar","fr"],"currencies":["KMF"],"timezones":["UTC+03:00"],"tld":[".km"],"callingCodes":["269"],"borders":[],"capitalLatLng":[-11.693126,43.254304],"latlng":[-12.16666666,44.25],"demonym":"Comoran","nativeName":"Komori","altSpellings":["KM","Union of the Comoros","Union des Comores","Udzima wa Komori","al-Ittiḥād al-Qumurī"]},"COG":{"a3":"COG","a2":"CG","name":"Republic of the Congo","capital":"Brazzaville","population":4559000,"area":342000,"region":"Africa","subregion":"Middle Africa","languages":["fr","ln"],"currencies":["XAF"],"timezones":["UTC+01:00"],"tld":[".cg"],"callingCodes":["242"],"borders":["AGO","CMR","CAF","COD","GAB"],"capitalLatLng":[-4.269441,15.271226],"latlng":[-1,15],"demonym":"Congolese","nativeName":"République du Congo","altSpellings":["CG","Congo-Brazzaville"]},"COD":{"a3":"COD","a2":"CD","name":"Democratic Republic of the Congo","capital":"Kinshasa","population":69360000,"area":2344858,"region":"Africa","subregion":"Middle Africa","languages":["fr","ln","kg","sw","lu"],"currencies":["CDF"],"timezones":["UTC+01:00","UTC+02:00"],"tld":[".cd"],"callingCodes":["243"],"borders":["AGO","BDI","CAF","COG","RWA","SSD","TZA","UGA","ZMB"],"capitalLatLng":[-4.321706,15.312597],"latlng":[0,25],"demonym":"Congolese","nativeName":"République démocratique du Congo","altSpellings":["CD","DR Congo","Congo-Kinshasa","DRC"]},"COK":{"a3":"COK","a2":"CK","name":"Cook Islands","capital":"Avarua","population":14974,"area":236,"region":"Oceania","subregion":"Polynesia","languages":["en"],"currencies":["NZD"],"timezones":[],"tld":[".ck"],"callingCodes":["682"],"borders":[],"capitalLatLng":[-21.207474,-159.770814],"latlng":[-21.23333333,-159.76666666],"demonym":"Cook Islander","nativeName":"Cook Islands","altSpellings":["CK","Kūki 'Āirani"]},"CRI":{"a3":"CRI","a2":"CR","name":"Costa Rica","capital":"San José","population":4713168,"area":51100,"region":"Americas","subregion":"Central America","languages":["es"],"currencies":["CRC"],"timezones":["UTC−06:00"],"tld":[".cr"],"callingCodes":["506"],"borders":["NIC","PAN"],"capitalLatLng":[9.932543,-84.079578],"latlng":[10,-84],"demonym":"Costa Rican","nativeName":"Costa Rica","altSpellings":["CR","Republic of Costa Rica","República de Costa Rica"]},"CIV":{"a3":"CIV","a2":"CI","name":"Ivory Coast","capital":"Yamoussoukro","population":23821000,"area":322463,"region":"Africa","subregion":"Western Africa","languages":["fr"],"currencies":["XOF"],"timezones":["UTC"],"tld":[".ci"],"callingCodes":["225"],"borders":["BFA","GHA","GIN","LBR","MLI"],"capitalLatLng":[6.809107,-5.273263],"latlng":[8,-5],"demonym":"Ivorian","nativeName":"Côte d'Ivoire","altSpellings":["CI","Ivory Coast","Republic of Côte d'Ivoire","République de Côte d'Ivoire"]},"HRV":{"a3":"HRV","a2":"HR","name":"Croatia","capital":"Zagreb","population":4267558,"area":56594,"region":"Europe","subregion":"Southern Europe","languages":["hr"],"currencies":["HRK"],"timezones":["UTC+01:00"],"tld":[".hr"],"callingCodes":["385"],"borders":["BIH","HUN","MNE","SRB","SVN"],"capitalLatLng":[45.813177,15.977048],"latlng":[45.16666666,15.5],"demonym":"Croatian","nativeName":"Hrvatska","altSpellings":["HR","Hrvatska","Republic of Croatia","Republika Hrvatska"]},"CUB":{"a3":"CUB","a2":"CU","name":"Cuba","capital":"Havana","population":11210064,"area":109884,"region":"Americas","subregion":"Caribbean","languages":["es"],"currencies":["CUC","CUP"],"timezones":["UTC−05:00"],"tld":[".cu"],"callingCodes":["53"],"borders":[],"capitalLatLng":[23.135305,-82.358963],"latlng":[21.5,-80],"demonym":"Cuban","nativeName":"Cuba","altSpellings":["CU","Republic of Cuba","República de Cuba"]},"CYP":{"a3":"CYP","a2":"CY","name":"Cyprus","capital":"Nicosia","population":858000,"area":9251,"region":"Europe","subregion":"Southern Europe","languages":["el","tr","hy"],"currencies":["EUR"],"timezones":["UTC+02:00"],"tld":[".cy"],"callingCodes":["357"],"borders":["GBR"],"capitalLatLng":[35.17393,33.364726],"latlng":[35,33],"demonym":"Cypriot","nativeName":"Κύπρος","altSpellings":["CY","Kýpros","Kıbrıs","Republic of Cyprus","Κυπριακή Δημοκρατία","Kıbrıs Cumhuriyeti"]},"CZE":{"a3":"CZE","a2":"CZ","name":"Czech Republic","capital":"Prague","population":10521600,"area":78865,"region":"Europe","subregion":"Eastern Europe","languages":["cs","sk"],"currencies":["CZK"],"timezones":["UTC+01:00"],"tld":[".cz"],"callingCodes":["420"],"borders":["AUT","DEU","POL","SVK"],"capitalLatLng":[50.087465,14.421254],"latlng":[49.75,15.5],"demonym":"Czech","nativeName":"Česká republika","altSpellings":["CZ","Česká republika","Česko"]},"DNK":{"a3":"DNK","a2":"DK","name":"Denmark","capital":"Copenhagen","population":5655750,"area":43094,"region":"Europe","subregion":"Northern Europe","languages":["da"],"currencies":["DKK"],"timezones":["UTC−04:00","UTC−03:00","UTC−01:00","UTC","UTC+01:00"],"tld":[".dk"],"callingCodes":["45"],"borders":["DEU"],"capitalLatLng":[55.686724,12.570072],"latlng":[56,10],"demonym":"Danish","nativeName":"Danmark","altSpellings":["DK","Danmark","Kingdom of Denmark","Kongeriget Danmark"]},"DJI":{"a3":"DJI","a2":"DJ","name":"Djibouti","capital":"Djibouti","population":886000,"area":23200,"region":"Africa","subregion":"Eastern Africa","languages":["fr","ar"],"currencies":["DJF"],"timezones":["UTC+03:00"],"tld":[".dj"],"callingCodes":["253"],"borders":["ERI","ETH","SOM"],"capitalLatLng":[11.814597,42.845306],"latlng":[11.5,43],"demonym":"Djibouti","nativeName":"Djibouti","altSpellings":["DJ","Jabuuti","Gabuuti","Republic of Djibouti","République de Djibouti","Gabuutih Ummuuno","Jamhuuriyadda Jabuuti"]},"DMA":{"a3":"DMA","a2":"DM","name":"Dominica","capital":"Roseau","population":71293,"area":751,"region":"Americas","subregion":"Caribbean","languages":["en"],"currencies":["XCD"],"timezones":["UTC−04:00"],"tld":[".dm"],"callingCodes":["1767"],"borders":[],"capitalLatLng":[48.771037,-95.769788],"latlng":[15.41666666,-61.33333333],"demonym":"Dominican","nativeName":"Dominica","altSpellings":["DM","Dominique","Wai‘tu kubuli","Commonwealth of Dominica"]},"DOM":{"a3":"DOM","a2":"DO","name":"Dominican Republic","capital":"Santo Domingo","population":10378267,"area":48671,"region":"Americas","subregion":"Caribbean","languages":["es"],"currencies":["DOP"],"timezones":["UTC−04:00"],"tld":[".do"],"callingCodes":["1809","1829","1849"],"borders":["HTI"],"capitalLatLng":[18.480197,-69.942111],"latlng":[19,-70.66666666],"demonym":"Dominican","nativeName":"República Dominicana","altSpellings":["DO"]},"ECU":{"a3":"ECU","a2":"EC","name":"Ecuador","capital":"Quito","population":15888900,"area":276841,"region":"Americas","subregion":"South America","languages":["es"],"currencies":["USD"],"timezones":["UTC−06:00","UTC−05:00"],"tld":[".ec"],"callingCodes":["593"],"borders":["COL","PER"],"capitalLatLng":[-0.220164,-78.512327],"latlng":[-2,-77.5],"demonym":"Ecuadorean","nativeName":"Ecuador","altSpellings":["EC","Republic of Ecuador","República del Ecuador"]},"EGY":{"a3":"EGY","a2":"EG","name":"Egypt","capital":"Cairo","population":87668100,"area":1002450,"region":"Africa","subregion":"Northern Africa","languages":["ar"],"currencies":["EGP"],"timezones":["UTC+02:00"],"tld":[".eg"],"callingCodes":["20"],"borders":["ISR","LBY","SDN"],"capitalLatLng":[30.048819,31.243666],"latlng":[27,30],"demonym":"Egyptian","nativeName":"مصر‎","altSpellings":["EG","Arab Republic of Egypt"]},"SLV":{"a3":"SLV","a2":"SV","name":"El Salvador","capital":"San Salvador","population":6401240,"area":21041,"region":"Americas","subregion":"Central America","languages":["es"],"currencies":["SVC","USD"],"timezones":["UTC−06:00"],"tld":[".sv"],"callingCodes":["503"],"borders":["GTM","HND"],"capitalLatLng":[13.698994,-89.191425],"latlng":[13.83333333,-88.91666666],"demonym":"Salvadoran","nativeName":"El Salvador","altSpellings":["SV","Republic of El Salvador","República de El Salvador"]},"GNQ":{"a3":"GNQ","a2":"GQ","name":"Equatorial Guinea","capital":"Malabo","population":1430000,"area":28051,"region":"Africa","subregion":"Middle Africa","languages":["es","fr"],"currencies":["XAF"],"timezones":["UTC+01:00"],"tld":[".gq"],"callingCodes":["240"],"borders":["CMR","GAB"],"capitalLatLng":[3.752828,8.780061],"latlng":[2,10],"demonym":"Equatorial Guinean","nativeName":"Guinea Ecuatorial","altSpellings":["GQ","Republic of Equatorial Guinea","República de Guinea Ecuatorial","République de Guinée équatoriale","República da Guiné Equatorial"]},"ERI":{"a3":"ERI","a2":"ER","name":"Eritrea","capital":"Asmara","population":6536000,"area":117600,"region":"Africa","subregion":"Eastern Africa","languages":["ti","ar","en"],"currencies":["ERN"],"timezones":["UTC+03:00"],"tld":[".er"],"callingCodes":["291"],"borders":["DJI","ETH","SDN"],"capitalLatLng":[15.338967,38.932676],"latlng":[15,39],"demonym":"Eritrean","nativeName":"ኤርትራ","altSpellings":["ER","State of Eritrea","ሃገረ ኤርትራ","Dawlat Iritriyá","ʾErtrā","Iritriyā",""]},"EST":{"a3":"EST","a2":"EE","name":"Estonia","capital":"Tallinn","population":1315819,"area":45227,"region":"Europe","subregion":"Northern Europe","languages":["et"],"currencies":["EUR"],"timezones":["UTC+02:00"],"tld":[".ee"],"callingCodes":["372"],"borders":["LVA","RUS"],"capitalLatLng":[59.437216,24.745369],"latlng":[59,26],"demonym":"Estonian","nativeName":"Eesti","altSpellings":["EE","Eesti","Republic of Estonia","Eesti Vabariik"]},"ETH":{"a3":"ETH","a2":"ET","name":"Ethiopia","capital":"Addis Ababa","population":87952991,"area":1104300,"region":"Africa","subregion":"Eastern Africa","languages":["am"],"currencies":["ETB"],"timezones":["UTC+03:00"],"tld":[".et"],"callingCodes":["251"],"borders":["DJI","ERI","KEN","SOM","SSD","SDN"],"capitalLatLng":[9.010793,38.761252],"latlng":[8,38],"demonym":"Ethiopian","nativeName":"ኢትዮጵያ","altSpellings":["ET","ʾĪtyōṗṗyā","Federal Democratic Republic of Ethiopia","የኢትዮጵያ ፌዴራላዊ ዲሞክራሲያዊ ሪፐብሊክ"]},"FLK":{"a3":"FLK","a2":"FK","name":"Falkland Islands","capital":"Stanley","population":3000,"area":12173,"region":"Americas","subregion":"South America","languages":["en"],"currencies":["FKP"],"timezones":[],"tld":[".fk"],"callingCodes":["500"],"borders":[],"capitalLatLng":[-51.695058,-57.849169],"latlng":[-51.75,-59],"demonym":"Falkland Islander","nativeName":"Falkland Islands","altSpellings":["FK","Islas Malvinas"]},"FRO":{"a3":"FRO","a2":"FO","name":"Faroe Islands","capital":"Tórshavn","population":48605,"area":1393,"region":"Europe","subregion":"Northern Europe","languages":["fo"],"currencies":["DKK"],"timezones":[],"tld":[".fo"],"callingCodes":["298"],"borders":[],"capitalLatLng":[62.012,-6.768],"latlng":[62,-7],"demonym":"Faroese","nativeName":"Føroyar","altSpellings":["FO","Føroyar","Færøerne"]},"FJI":{"a3":"FJI","a2":"FJ","name":"Fiji","capital":"Suva","population":859178,"area":18272,"region":"Oceania","subregion":"Melanesia","languages":["en","fj","hi","ur"],"currencies":["FJD"],"timezones":["UTC+12:00"],"tld":[".fj"],"callingCodes":["679"],"borders":[],"capitalLatLng":[-18.141588,178.442166],"latlng":[-18,175],"demonym":"Fijian","nativeName":"Fiji","altSpellings":["FJ","Viti","Republic of Fiji","Matanitu ko Viti","Fijī Gaṇarājya"]},"FIN":{"a3":"FIN","a2":"FI","name":"Finland","capital":"Helsinki","population":5470437,"area":338424,"region":"Europe","subregion":"Northern Europe","languages":["fi","sv"],"currencies":["EUR"],"timezones":["UTC+02:00"],"tld":[".fi"],"callingCodes":["358"],"borders":["NOR","SWE","RUS"],"capitalLatLng":[60.16741,24.942577],"latlng":[64,26],"demonym":"Finnish","nativeName":"Suomi","altSpellings":["FI","Suomi","Republic of Finland","Suomen tasavalta","Republiken Finland"]},"FRA":{"a3":"FRA","a2":"FR","name":"France","capital":"Paris","population":66078000,"area":640679,"region":"Europe","subregion":"Western Europe","languages":["fr"],"currencies":["EUR"],"timezones":["UTC−10:00","UTC−09:30","UTC−09:00","UTC−08:00","UTC−04:00","UTC−03:00","UTC+01:00","UTC+03:00","UTC+04:00","UTC+05:00","UTC+11:00","UTC+12:00"],"tld":[".fr"],"callingCodes":["33"],"borders":["AND","BEL","DEU","ITA","LUX","MCO","ESP","CHE"],"capitalLatLng":[48.856697,2.351462],"latlng":[46,2],"demonym":"French","nativeName":"France","altSpellings":["FR","French Republic","République française"]},"GUF":{"a3":"GUF","a2":"GF","name":"French Guiana","capital":"Cayenne","population":237549,"area":0,"region":"Americas","subregion":"South America","languages":["fr"],"currencies":["EUR"],"timezones":[],"tld":[".gf"],"callingCodes":["594"],"borders":["BRA","SUR"],"capitalLatLng":[4.937114,-52.325831],"latlng":[4,-53],"demonym":"","nativeName":"Guyane française","altSpellings":["GF","Guiana","Guyane"]},"PYF":{"a3":"PYF","a2":"PF","name":"French Polynesia","capital":"Papeetē","population":268270,"area":4167,"region":"Oceania","subregion":"Polynesia","languages":["fr"],"currencies":["XPF"],"timezones":[],"tld":[".pf"],"callingCodes":["689"],"borders":[],"capitalLatLng":[-17.537384,-149.565996],"latlng":[-15,-140],"demonym":"French Polynesian","nativeName":"Polynésie française","altSpellings":["PF","Polynésie française","French Polynesia","Pōrīnetia Farāni"]},"ATF":{"a3":"ATF","a2":"TF","name":"French Southern and Antarctic Lands","capital":"Port-aux-Français","population":140,"area":7747,"region":"","subregion":"","languages":["fr"],"currencies":["EUR"],"timezones":[],"tld":[".tf"],"callingCodes":[""],"borders":[],"capitalLatLng":[-49.353677,70.243567],"latlng":[-49.25,69.167],"demonym":"French","nativeName":"Territoire des Terres australes et antarctiques françaises","altSpellings":["TF"]},"GAB":{"a3":"GAB","a2":"GA","name":"Gabon","capital":"Libreville","population":1711000,"area":267668,"region":"Africa","subregion":"Middle Africa","languages":["fr"],"currencies":["XAF"],"timezones":["UTC+01:00"],"tld":[".ga"],"callingCodes":["241"],"borders":["CMR","COG","GNQ"],"capitalLatLng":[0.390002,9.454001],"latlng":[-1,11.75],"demonym":"Gabonese","nativeName":"Gabon","altSpellings":["GA","Gabonese Republic","République Gabonaise"]},"GMB":{"a3":"GMB","a2":"GM","name":"The Gambia","capital":"Banjul","population":1882450,"area":11295,"region":"Africa","subregion":"Western Africa","languages":["en"],"currencies":["GMD"],"timezones":[],"tld":[".gm"],"callingCodes":["220"],"borders":["SEN"],"capitalLatLng":[13.441346,-16.562471],"latlng":[13.46666666,-16.56666666],"demonym":"Gambian","nativeName":"Gambia","altSpellings":["GM","Republic of the Gambia"]},"GEO":{"a3":"GEO","a2":"GE","name":"Georgia","capital":"Tbilisi","population":4490500,"area":69700,"region":"Asia","subregion":"Western Asia","languages":["ka"],"currencies":["GEL"],"timezones":[],"tld":[".ge"],"callingCodes":["995"],"borders":["ARM","AZE","RUS","TUR"],"capitalLatLng":[41.693459,44.80145],"latlng":[42,43.5],"demonym":"Georgian","nativeName":"საქართველო","altSpellings":["GE","Sakartvelo"]},"DEU":{"a3":"DEU","a2":"DE","name":"Germany","capital":"Berlin","population":80783000,"area":357114,"region":"Europe","subregion":"Western Europe","languages":["de"],"currencies":["EUR"],"timezones":["UTC+01:00"],"tld":[".de"],"callingCodes":["49"],"borders":["AUT","BEL","CZE","DNK","FRA","LUX","NLD","POL","CHE"],"capitalLatLng":[52.517036,13.38886],"latlng":[51,9],"demonym":"German","nativeName":"Deutschland","altSpellings":["DE","Federal Republic of Germany","Bundesrepublik Deutschland"]},"GHA":{"a3":"GHA","a2":"GH","name":"Ghana","capital":"Accra","population":27043093,"area":238533,"region":"Africa","subregion":"Western Africa","languages":["en"],"currencies":["GHS"],"timezones":["UTC"],"tld":[".gh"],"callingCodes":["233"],"borders":["BFA","CIV","TGO"],"capitalLatLng":[5.560014,-0.205744],"latlng":[8,-2],"demonym":"Ghanaian","nativeName":"Ghana","altSpellings":["GH"]},"GIB":{"a3":"GIB","a2":"GI","name":"Gibraltar","capital":"Gibraltar","population":30001,"area":6,"region":"Europe","subregion":"Southern Europe","languages":["en"],"currencies":["GIP"],"timezones":[],"tld":[".gi"],"callingCodes":["350"],"borders":["ESP"],"capitalLatLng":[36.140807,-5.35413],"latlng":[36.13333333,-5.35],"demonym":"Gibraltar","nativeName":"Gibraltar","altSpellings":["GI"]},"GRC":{"a3":"GRC","a2":"GR","name":"Greece","capital":"Athens","population":10992589,"area":131990,"region":"Europe","subregion":"Southern Europe","languages":["el"],"currencies":["EUR"],"timezones":["UTC+02:00"],"tld":[".gr"],"callingCodes":["30"],"borders":["ALB","BGR","TUR","MKD"],"capitalLatLng":[37.983941,23.728305],"latlng":[39,22],"demonym":"Greek","nativeName":"Ελλάδα","altSpellings":["GR","Elláda","Hellenic Republic","Ελληνική Δημοκρατία"]},"GRL":{"a3":"GRL","a2":"GL","name":"Greenland","capital":"Nuuk","population":56295,"area":2166086,"region":"Americas","subregion":"Northern America","languages":["kl"],"currencies":["DKK"],"timezones":[],"tld":[".gl"],"callingCodes":["299"],"borders":[],"capitalLatLng":[64.175029,-51.735539],"latlng":[72,-40],"demonym":"Greenlandic","nativeName":"Kalaallit Nunaat","altSpellings":["GL","Grønland"]},"GRD":{"a3":"GRD","a2":"GD","name":"Grenada","capital":"St. George's","population":103328,"area":344,"region":"Americas","subregion":"Caribbean","languages":["en"],"currencies":["XCD"],"timezones":["UTC−04:00"],"tld":[".gd"],"callingCodes":["1473"],"borders":[],"capitalLatLng":[48.658138,6.928099],"latlng":[12.11666666,-61.66666666],"demonym":"Grenadian","nativeName":"Grenada","altSpellings":["GD"]},"GLP":{"a3":"GLP","a2":"GP","name":"Guadeloupe","capital":"Basse-Terre","population":405739,"area":0,"region":"Americas","subregion":"Caribbean","languages":["fr"],"currencies":["EUR"],"timezones":[],"tld":[".gp"],"callingCodes":["590"],"borders":[],"capitalLatLng":[16.000078,-61.733337],"latlng":[16.25,-61.583333],"demonym":"Guadeloupian","nativeName":"Guadeloupe","altSpellings":["GP","Gwadloup"]},"GUM":{"a3":"GUM","a2":"GU","name":"Guam","capital":"Hagåtña","population":159358,"area":549,"region":"Oceania","subregion":"Micronesia","languages":["en","ch","es"],"currencies":["USD"],"timezones":[],"tld":[".gu"],"callingCodes":["1671"],"borders":[],"capitalLatLng":[13.472745,144.752018],"latlng":[13.46666666,144.78333333],"demonym":"Guamanian","nativeName":"Guam","altSpellings":["GU","Guåhån"]},"GTM":{"a3":"GTM","a2":"GT","name":"Guatemala","capital":"Guatemala City","population":15806675,"area":108889,"region":"Americas","subregion":"Central America","languages":["es"],"currencies":["GTQ"],"timezones":["UTC−06:00"],"tld":[".gt"],"callingCodes":["502"],"borders":["BLZ","SLV","HND","MEX"],"capitalLatLng":[14.622233,-90.518519],"latlng":[15.5,-90.25],"demonym":"Guatemalan","nativeName":"Guatemala","altSpellings":["GT"]},"GGY":{"a3":"GGY","a2":"GG","name":"Guernsey","capital":"St. Peter Port","population":63085,"area":78,"region":"Europe","subregion":"Northern Europe","languages":["en","fr"],"currencies":["GBP"],"timezones":[],"tld":[".gg"],"callingCodes":["44"],"borders":[],"capitalLatLng":[49.456814,-2.538998],"latlng":[49.46666666,-2.58333333],"demonym":"Channel Islander","nativeName":"Guernsey","altSpellings":["GG","Bailiwick of Guernsey","Bailliage de Guernesey"]},"GIN":{"a3":"GIN","a2":"GN","name":"Guinea","capital":"Conakry","population":10628972,"area":245857,"region":"Africa","subregion":"Western Africa","languages":["fr","ff"],"currencies":["GNF"],"timezones":["UTC"],"tld":[".gn"],"callingCodes":["224"],"borders":["CIV","GNB","LBR","MLI","SEN","SLE"],"capitalLatLng":[9.51706,-13.699843],"latlng":[11,-10],"demonym":"Guinean","nativeName":"Guinée","altSpellings":["GN","Republic of Guinea","République de Guinée"]},"GNB":{"a3":"GNB","a2":"GW","name":"Guinea-Bissau","capital":"Bissau","population":1746000,"area":36125,"region":"Africa","subregion":"Western Africa","languages":["pt"],"currencies":["XOF"],"timezones":["UTC"],"tld":[".gw"],"callingCodes":["245"],"borders":["GIN","SEN"],"capitalLatLng":[11.861324,-15.583055],"latlng":[12,-15],"demonym":"Guinea-Bissauan","nativeName":"Guiné-Bissau","altSpellings":["GW","Republic of Guinea-Bissau","República da Guiné-Bissau"]},"GUY":{"a3":"GUY","a2":"GY","name":"Guyana","capital":"Georgetown","population":784894,"area":214969,"region":"Americas","subregion":"South America","languages":["en"],"currencies":["GYD"],"timezones":["UTC−04:00"],"tld":[".gy"],"callingCodes":["592"],"borders":["BRA","SUR","VEN"],"capitalLatLng":[6.802577,-58.162861],"latlng":[5,-59],"demonym":"Guyanese","nativeName":"Guyana","altSpellings":["GY","Co-operative Republic of Guyana"]},"HTI":{"a3":"HTI","a2":"HT","name":"Haiti","capital":"Port-au-Prince","population":10745665,"area":27750,"region":"Americas","subregion":"Caribbean","languages":["fr","ht"],"currencies":["HTG","USD"],"timezones":["UTC−05:00"],"tld":[".ht"],"callingCodes":["509"],"borders":["DOM"],"capitalLatLng":[18.547327,-72.339593],"latlng":[19,-72.41666666],"demonym":"Haitian","nativeName":"Haïti","altSpellings":["HT","Republic of Haiti","République d'Haïti","Repiblik Ayiti"]},"HMD":{"a3":"HMD","a2":"HM","name":"Heard Island and McDonald Islands","capital":"","population":0,"area":412,"region":"","subregion":"","languages":["en"],"currencies":["AUD"],"timezones":[],"tld":[".hm",".aq"],"callingCodes":[""],"borders":[],"capitalLatLng":null,"latlng":[-53.1,72.51666666],"demonym":"Heard and McDonald Islander","nativeName":"Heard Island and McDonald Islands","altSpellings":["HM"]},"HND":{"a3":"HND","a2":"HN","name":"Honduras","capital":"Tegucigalpa","population":8725111,"area":112492,"region":"Americas","subregion":"Central America","languages":["es"],"currencies":["HNL"],"timezones":["UTC−06:00"],"tld":[".hn"],"callingCodes":["504"],"borders":["GTM","SLV","NIC"],"capitalLatLng":[14.105686,-87.204676],"latlng":[15,-86.5],"demonym":"Honduran","nativeName":"Honduras","altSpellings":["HN","Republic of Honduras","República de Honduras"]},"HKG":{"a3":"HKG","a2":"HK","name":"Hong Kong","capital":"City of Victoria","population":7234800,"area":1104,"region":"Asia","subregion":"Eastern Asia","languages":["en","zh"],"currencies":["HKD"],"timezones":["UTC+08:00"],"tld":[".hk"],"callingCodes":["852"],"borders":["CHN"],"capitalLatLng":[-36.59861,144.678005],"latlng":[22.25,114.16666666],"demonym":"Chinese","nativeName":"香港","altSpellings":["HK","香港"]},"HUN":{"a3":"HUN","a2":"HU","name":"Hungary","capital":null,"population":0,"area":0,"region":null,"subregion":null,"languages":[],"currencies":[],"timezones":[],"tld":[],"callingCodes":[],"borders":[],"capitalLatLng":null,"latlng":null,"demonym":null,"nativeName":null,"altSpellings":[]},"ISL":{"a3":"ISL","a2":"IS","name":"Iceland","capital":"Reykjavik","population":328170,"area":103000,"region":"Europe","subregion":"Northern Europe","languages":["is"],"currencies":["ISK"],"timezones":["UTC"],"tld":[".is"],"callingCodes":["354"],"borders":[],"capitalLatLng":[64.145981,-21.942237],"latlng":[65,-18],"demonym":"Icelander","nativeName":"Ísland","altSpellings":["IS","Island","Republic of Iceland","Lýðveldið Ísland"]},"IND":{"a3":"IND","a2":"IN","name":"India","capital":"New Delhi","population":1263930000,"area":3287590,"region":"Asia","subregion":"Southern Asia","languages":["hi","en"],"currencies":["INR"],"timezones":["UTC+05:30"],"tld":[".in"],"callingCodes":["91"],"borders":["AFG","BGD","BTN","MMR","CHN","NPL","PAK","LKA"],"capitalLatLng":[28.614179,77.202266],"latlng":[20,77],"demonym":"Indian","nativeName":"भारत","altSpellings":["IN","Bhārat","Republic of India","Bharat Ganrajya"]},"IDN":{"a3":"IDN","a2":"ID","name":"Indonesia","capital":"Jakarta","population":252164800,"area":1904569,"region":"Asia","subregion":"South-Eastern Asia","languages":["id"],"currencies":["IDR"],"timezones":["UTC+07:00","UTC+08:00","UTC+09:00"],"tld":[".id"],"callingCodes":["62"],"borders":["TLS","MYS","PNG"],"capitalLatLng":[-6.175394,106.827183],"latlng":[-5,120],"demonym":"Indonesian","nativeName":"Indonesia","altSpellings":["ID","Republic of Indonesia","Republik Indonesia"]},"IRN":{"a3":"IRN","a2":"IR","name":"Iran","capital":"Tehran","population":77966400,"area":1648195,"region":"Asia","subregion":"Southern Asia","languages":["fa"],"currencies":["IRR"],"timezones":["UTC+03:30"],"tld":[".ir"],"callingCodes":["98"],"borders":["AFG","ARM","AZE","IRQ","PAK","TUR","TKM"],"capitalLatLng":[35.700618,51.401378],"latlng":[32,53],"demonym":"Iranian","nativeName":"Irān","altSpellings":["IR","Islamic Republic of Iran","Jomhuri-ye Eslāmi-ye Irān"]},"IRQ":{"a3":"IRQ","a2":"IQ","name":"Iraq","capital":"Baghdad","population":36004552,"area":438317,"region":"Asia","subregion":"Western Asia","languages":["ar","ku"],"currencies":["IQD"],"timezones":["UTC+03:00"],"tld":[".iq"],"callingCodes":["964"],"borders":["IRN","JOR","KWT","SAU","SYR","TUR"],"capitalLatLng":[33.302431,44.378799],"latlng":[33,44],"demonym":"Iraqi","nativeName":"العراق","altSpellings":["IQ","Republic of Iraq","Jumhūriyyat al-‘Irāq"]},"IRL":{"a3":"IRL","a2":"IE","name":"Ireland","capital":"Dublin","population":6378000,"area":70273,"region":"Europe","subregion":"Northern Europe","languages":["ga","en"],"currencies":["EUR"],"timezones":["UTC"],"tld":[".ie"],"callingCodes":["353"],"borders":["GBR"],"capitalLatLng":[53.349764,-6.260273],"latlng":[53,-8],"demonym":"Irish","nativeName":"Éire","altSpellings":["IE","Éire","Republic of Ireland","Poblacht na hÉireann"]},"ISR":{"a3":"ISR","a2":"IL","name":"Israel","capital":"Jerusalem","population":8268400,"area":20770,"region":"Asia","subregion":"Western Asia","languages":["he","ar"],"currencies":["ILS"],"timezones":["UTC+02:00"],"tld":[".il"],"callingCodes":["972"],"borders":["EGY","JOR","LBN","SYR"],"capitalLatLng":[31.778345,35.225079],"latlng":[31.5,34.75],"demonym":"Israeli","nativeName":"יִשְׂרָאֵל","altSpellings":["IL","State of Israel","Medīnat Yisrā'el"]},"ITA":{"a3":"ITA","a2":"IT","name":"Italy","capital":"Rome","population":60769102,"area":301336,"region":"Europe","subregion":"Southern Europe","languages":["it"],"currencies":["EUR"],"timezones":["UTC+01:00"],"tld":[".it"],"callingCodes":["39"],"borders":["AUT","FRA","SMR","SVN","CHE","VAT"],"capitalLatLng":[41.89332,12.482932],"latlng":[42.83333333,12.83333333],"demonym":"Italian","nativeName":"Italia","altSpellings":["IT","Italian Republic","Repubblica italiana"]},"JAM":{"a3":"JAM","a2":"JM","name":"Jamaica","capital":"Kingston","population":2717991,"area":10991,"region":"Americas","subregion":"Caribbean","languages":["en"],"currencies":["JMD"],"timezones":["UTC−05:00"],"tld":[".jm"],"callingCodes":["1876"],"borders":[],"capitalLatLng":[17.971215,-76.792813],"latlng":[18.25,-77.5],"demonym":"Jamaican","nativeName":"Jamaica","altSpellings":["JM"]},"JPN":{"a3":"JPN","a2":"JP","name":"Japan","capital":"Tokyo","population":127080000,"area":377930,"region":"Asia","subregion":"Eastern Asia","languages":["ja"],"currencies":["JPY"],"timezones":["UTC+09:00"],"tld":[".jp"],"callingCodes":["81"],"borders":[],"capitalLatLng":[35.682839,139.759455],"latlng":[36,138],"demonym":"Japanese","nativeName":"日本","altSpellings":["JP","Nippon","Nihon"]},"JEY":{"a3":"JEY","a2":"JE","name":"Jersey","capital":"Saint Helier","population":99000,"area":116,"region":"Europe","subregion":"Northern Europe","languages":["en","fr"],"currencies":["GBP"],"timezones":[],"tld":[".je"],"callingCodes":["44"],"borders":[],"capitalLatLng":[47.384387,4.683325],"latlng":[49.25,-2.16666666],"demonym":"Channel Islander","nativeName":"Jersey","altSpellings":["JE","Bailiwick of Jersey","Bailliage de Jersey","Bailliage dé Jèrri"]},"JOR":{"a3":"JOR","a2":"JO","name":"Jordan","capital":"Amman","population":6666960,"area":89342,"region":"Asia","subregion":"Western Asia","languages":["ar"],"currencies":["JOD"],"timezones":["UTC+03:00"],"tld":[".jo"],"callingCodes":["962"],"borders":["IRQ","ISR","SAU","SYR"],"capitalLatLng":[31.951569,35.923962],"latlng":[31,36],"demonym":"Jordanian","nativeName":"الأردن","altSpellings":["JO","Hashemite Kingdom of Jordan","al-Mamlakah al-Urdunīyah al-Hāshimīyah"]},"KAZ":{"a3":"KAZ","a2":"KZ","name":"Kazakhstan","capital":"Astana","population":17377800,"area":2724900,"region":"Asia","subregion":"Central Asia","languages":["kk","ru"],"currencies":["KZT"],"timezones":["UTC+05:00","UTC+06:00"],"tld":[".kz",".қаз"],"callingCodes":["76","77"],"borders":["CHN","KGZ","RUS","TKM","UZB"],"capitalLatLng":[51.12822,71.430668],"latlng":[48,68],"demonym":"Kazakhstani","nativeName":"Қазақстан","altSpellings":["KZ","Qazaqstan","Казахстан","Republic of Kazakhstan","Қазақстан Республикасы","Qazaqstan Respublïkası","Республика Казахстан","Respublika Kazakhstan"]},"KEN":{"a3":"KEN","a2":"KE","name":"Kenya","capital":"Nairobi","population":41800000,"area":580367,"region":"Africa","subregion":"Eastern Africa","languages":["en","sw"],"currencies":["KES"],"timezones":["UTC+03:00"],"tld":[".ke"],"callingCodes":["254"],"borders":["ETH","SOM","SSD","TZA","UGA"],"capitalLatLng":[-1.283253,36.817245],"latlng":[1,38],"demonym":"Kenyan","nativeName":"Kenya","altSpellings":["KE","Republic of Kenya","Jamhuri ya Kenya"]},"KIR":{"a3":"KIR","a2":"KI","name":"Kiribati","capital":"South Tarawa","population":106461,"area":811,"region":"Oceania","subregion":"Micronesia","languages":["en"],"currencies":["AUD"],"timezones":["UTC+12:00","UTC+13:00","UTC+14:00"],"tld":[".ki"],"callingCodes":["686"],"borders":[],"capitalLatLng":[1.349078,173.038651],"latlng":[1.41666666,173],"demonym":"I-Kiribati","nativeName":"Kiribati","altSpellings":["KI","Republic of Kiribati","Ribaberiki Kiribati"]},"PRK":{"a3":"PRK","a2":"KP","name":"North Korea","capital":"Pyongyang","population":25027000,"area":120538,"region":"Asia","subregion":"Eastern Asia","languages":["ko"],"currencies":["KPW"],"timezones":["UTC+09:00"],"tld":[".kp"],"callingCodes":["850"],"borders":["CHN","KOR","RUS"],"capitalLatLng":[39.019474,125.753388],"latlng":[40,127],"demonym":"North Korean","nativeName":"북한","altSpellings":["KP","Democratic People's Republic of Korea","조선민주주의인민공화국","Chosŏn Minjujuŭi Inmin Konghwaguk"]},"KOR":{"a3":"KOR","a2":"KR","name":"South Korea","capital":"Seoul","population":50423955,"area":100210,"region":"Asia","subregion":"Eastern Asia","languages":["ko"],"currencies":["KRW"],"timezones":["UTC+09:00"],"tld":[".kr"],"callingCodes":["82"],"borders":["PRK"],"capitalLatLng":[37.566679,126.978291],"latlng":[37,127.5],"demonym":"South Korean","nativeName":"대한민국","altSpellings":["KR","Republic of Korea"]},"KWT":{"a3":"KWT","a2":"KW","name":"Kuwait","capital":"Kuwait City","population":3268431,"area":17818,"region":"Asia","subregion":"Western Asia","languages":["ar"],"currencies":["KWD"],"timezones":["UTC+03:00"],"tld":[".kw"],"callingCodes":["965"],"borders":["IRN","SAU"],"capitalLatLng":[29.379709,47.973563],"latlng":[29.5,45.75],"demonym":"Kuwaiti","nativeName":"الكويت","altSpellings":["KW","State of Kuwait","Dawlat al-Kuwait"]},"KGZ":{"a3":"KGZ","a2":"KG","name":"Kyrgyzstan","capital":"Bishkek","population":5776570,"area":199951,"region":"Asia","subregion":"Central Asia","languages":["ky","ru"],"currencies":["KGS"],"timezones":["UTC+06:00"],"tld":[".kg"],"callingCodes":["996"],"borders":["CHN","KAZ","TJK","UZB"],"capitalLatLng":[42.876562,74.607008],"latlng":[41,75],"demonym":"Kirghiz","nativeName":"Кыргызстан","altSpellings":["KG","Киргизия","Kyrgyz Republic","Кыргыз Республикасы","Kyrgyz Respublikasy"]},"LAO":{"a3":"LAO","a2":"LA","name":"Laos","capital":"Vientiane","population":6693300,"area":236800,"region":"Asia","subregion":"South-Eastern Asia","languages":["lo"],"currencies":["LAK"],"timezones":["UTC+07:00"],"tld":[".la"],"callingCodes":["856"],"borders":["MMR","KHM","CHN","THA","VNM"],"capitalLatLng":[17.964099,102.613371],"latlng":[18,105],"demonym":"Laotian","nativeName":"ສປປລາວ","altSpellings":["LA","Lao","Lao People's Democratic Republic","Sathalanalat Paxathipatai Paxaxon Lao"]},"LVA":{"a3":"LVA","a2":"LV","name":"Latvia","capital":"Riga","population":1991800,"area":64559,"region":"Europe","subregion":"Northern Europe","languages":["lv"],"currencies":["EUR"],"timezones":["UTC+02:00"],"tld":[".lv"],"callingCodes":["371"],"borders":["BLR","EST","LTU","RUS"],"capitalLatLng":[56.949398,24.105185],"latlng":[57,25],"demonym":"Latvian","nativeName":"Latvija","altSpellings":["LV","Republic of Latvia","Latvijas Republika"]},"LBN":{"a3":"LBN","a2":"LB","name":"Lebanon","capital":"Beirut","population":4104000,"area":10452,"region":"Asia","subregion":"Western Asia","languages":["ar","fr"],"currencies":["LBP"],"timezones":["UTC+02:00"],"tld":[".lb"],"callingCodes":["961"],"borders":["ISR","SYR"],"capitalLatLng":[33.89592,35.47843],"latlng":[33.83333333,35.83333333],"demonym":"Lebanese","nativeName":"لبنان","altSpellings":["LB","Lebanese Republic","Al-Jumhūrīyah Al-Libnānīyah"]},"LSO":{"a3":"LSO","a2":"LS","name":"Lesotho","capital":"Maseru","population":2098000,"area":30355,"region":"Africa","subregion":"Southern Africa","languages":["en","st"],"currencies":["LSL","ZAR"],"timezones":["UTC+02:00"],"tld":[".ls"],"callingCodes":["266"],"borders":["ZAF"],"capitalLatLng":[-29.310054,27.478222],"latlng":[-29.5,28.5],"demonym":"Mosotho","nativeName":"Lesotho","altSpellings":["LS","Kingdom of Lesotho","Muso oa Lesotho"]},"LBR":{"a3":"LBR","a2":"LR","name":"Liberia","capital":"Monrovia","population":4397000,"area":111369,"region":"Africa","subregion":"Western Africa","languages":["en"],"currencies":["LRD"],"timezones":["UTC"],"tld":[".lr"],"callingCodes":["231"],"borders":["GIN","CIV","SLE"],"capitalLatLng":[6.328034,-10.797788],"latlng":[6.5,-9.5],"demonym":"Liberian","nativeName":"Liberia","altSpellings":["LR","Republic of Liberia"]},"LBY":{"a3":"LBY","a2":"LY","name":"Libya","capital":"Tripoli","population":6253000,"area":1759540,"region":"Africa","subregion":"Northern Africa","languages":["ar"],"currencies":["LYD"],"timezones":["UTC+01:00"],"tld":[".ly"],"callingCodes":["218"],"borders":["DZA","TCD","EGY","NER","SDN","TUN"],"capitalLatLng":[32.896672,13.177792],"latlng":[25,17],"demonym":"Libyan","nativeName":"‏ليبيا","altSpellings":["LY","State of Libya","Dawlat Libya"]},"LIE":{"a3":"LIE","a2":"LI","name":"Liechtenstein","capital":"Vaduz","population":37132,"area":160,"region":"Europe","subregion":"Western Europe","languages":["de"],"currencies":["CHF"],"timezones":["UTC+01:00"],"tld":[".li"],"callingCodes":["423"],"borders":["AUT","CHE"],"capitalLatLng":[47.139286,9.522796],"latlng":[47.26666666,9.53333333],"demonym":"Liechtensteiner","nativeName":"Liechtenstein","altSpellings":["LI","Principality of Liechtenstein","Fürstentum Liechtenstein"]},"LTU":{"a3":"LTU","a2":"LT","name":"Lithuania","capital":"Vilnius","population":2927310,"area":65300,"region":"Europe","subregion":"Northern Europe","languages":["lt"],"currencies":["EUR"],"timezones":["UTC+02:00"],"tld":[".lt"],"callingCodes":["370"],"borders":["BLR","LVA","POL","RUS"],"capitalLatLng":[54.687046,25.282911],"latlng":[56,24],"demonym":"Lithuanian","nativeName":"Lietuva","altSpellings":["LT","Republic of Lithuania","Lietuvos Respublika"]},"LUX":{"a3":"LUX","a2":"LU","name":"Luxembourg","capital":"Luxembourg","population":549700,"area":2586,"region":"Europe","subregion":"Western Europe","languages":["fr","de","lb"],"currencies":["EUR"],"timezones":["UTC+01:00"],"tld":[".lu"],"callingCodes":["352"],"borders":["BEL","FRA","DEU"],"capitalLatLng":[49.815868,6.129675],"latlng":[49.75,6.16666666],"demonym":"Luxembourger","nativeName":"Luxembourg","altSpellings":["LU","Grand Duchy of Luxembourg","Grand-Duché de Luxembourg","Großherzogtum Luxemburg","Groussherzogtum Lëtzebuerg"]},"MAC":{"a3":"MAC","a2":"MO","name":"Macau","capital":"","population":631000,"area":30,"region":"Asia","subregion":"Eastern Asia","languages":["zh","pt"],"currencies":["MOP"],"timezones":["UTC+08:00"],"tld":[".mo"],"callingCodes":["853"],"borders":["CHN"],"capitalLatLng":null,"latlng":[22.16666666,113.55],"demonym":"Chinese","nativeName":"澳門","altSpellings":["MO","澳门","Macao Special Administrative Region of the People's Republic of China","中華人民共和國澳門特別行政區","Região Administrativa Especial de Macau da República Popular da China"]},"MKD":{"a3":"MKD","a2":"MK","name":"Republic of Macedonia","capital":"Skopje","population":2058539,"area":25713,"region":"Europe","subregion":"Southern Europe","languages":["mk"],"currencies":["MKD"],"timezones":["UTC+01:00"],"tld":[".mk"],"callingCodes":["389"],"borders":["ALB","BGR","GRC","KOS","SRB"],"capitalLatLng":[41.996092,21.43165],"latlng":[41.83333333,22],"demonym":"Macedonian","nativeName":"Македонија","altSpellings":["MK","Republic of Macedonia","Република Македонија"]},"MDG":{"a3":"MDG","a2":"MG","name":"Madagascar","capital":"Antananarivo","population":21842167,"area":587041,"region":"Africa","subregion":"Eastern Africa","languages":["fr","mg"],"currencies":["MGA"],"timezones":["UTC+03:00"],"tld":[".mg"],"callingCodes":["261"],"borders":[],"capitalLatLng":[-18.910012,47.525581],"latlng":[-20,47],"demonym":"Malagasy","nativeName":"Madagasikara","altSpellings":["MG","Republic of Madagascar","Repoblikan'i Madagasikara","République de Madagascar"]},"MWI":{"a3":"MWI","a2":"MW","name":"Malawi","capital":"Lilongwe","population":15805239,"area":118484,"region":"Africa","subregion":"Eastern Africa","languages":["en","ny"],"currencies":["MWK"],"timezones":["UTC+02:00"],"tld":[".mw"],"callingCodes":["265"],"borders":["MOZ","TZA","ZMB"],"capitalLatLng":[-13.987511,33.768144],"latlng":[-13.5,34],"demonym":"Malawian","nativeName":"Malawi","altSpellings":["MW","Republic of Malawi"]},"MYS":{"a3":"MYS","a2":"MY","name":"Malaysia","capital":"Kuala Lumpur","population":30430500,"area":330803,"region":"Asia","subregion":"South-Eastern Asia","languages":[],"currencies":["MYR"],"timezones":["UTC+08:00"],"tld":[".my"],"callingCodes":["60"],"borders":["BRN","IDN","THA"],"capitalLatLng":[3.151696,101.694237],"latlng":[2.5,112.5],"demonym":"Malaysian","nativeName":"Malaysia","altSpellings":["MY"]},"MDV":{"a3":"MDV","a2":"MV","name":"Maldives","capital":"Malé","population":341256,"area":300,"region":"Asia","subregion":"Southern Asia","languages":["dv"],"currencies":["MVR"],"timezones":["UTC+05:00"],"tld":[".mv"],"callingCodes":["960"],"borders":[],"capitalLatLng":[16.370036,-2.290024],"latlng":[3.25,73],"demonym":"Maldivan","nativeName":"Maldives","altSpellings":["MV","Maldive Islands","Republic of the Maldives","Dhivehi Raajjeyge Jumhooriyya"]},"MLI":{"a3":"MLI","a2":"ML","name":"Mali","capital":"Bamako","population":15768000,"area":1240192,"region":"Africa","subregion":"Western Africa","languages":["fr"],"currencies":["XOF"],"timezones":["UTC"],"tld":[".ml"],"callingCodes":["223"],"borders":["DZA","BFA","GIN","CIV","MRT","NER","SEN"],"capitalLatLng":[12.605033,-7.986514],"latlng":[17,-4],"demonym":"Malian","nativeName":"Mali","altSpellings":["ML","Republic of Mali","République du Mali"]},"MLT":{"a3":"MLT","a2":"MT","name":"Malta","capital":"Valletta","population":416055,"area":316,"region":"Europe","subregion":"Southern Europe","languages":["mt","en"],"currencies":["EUR"],"timezones":["UTC+01:00"],"tld":[".mt"],"callingCodes":["356"],"borders":[],"capitalLatLng":[35.898982,14.513676],"latlng":[35.83333333,14.58333333],"demonym":"Maltese","nativeName":"Malta","altSpellings":["MT","Republic of Malta","Repubblika ta' Malta"]},"IMN":{"a3":"IMN","a2":"IM","name":"Isle of Man","capital":"Douglas","population":84497,"area":572,"region":"Europe","subregion":"Northern Europe","languages":["en","gv"],"currencies":["GBP"],"timezones":[],"tld":[".im"],"callingCodes":["44"],"borders":[],"capitalLatLng":[39.762842,-88.217052],"latlng":[54.25,-4.5],"demonym":"Manx","nativeName":"Isle of Man","altSpellings":["IM","Ellan Vannin","Mann","Mannin"]},"MHL":{"a3":"MHL","a2":"MH","name":"Marshall Islands","capital":"Majuro","population":56086,"area":181,"region":"Oceania","subregion":"Micronesia","languages":["en","mh"],"currencies":["USD"],"timezones":["UTC+12:00"],"tld":[".mh"],"callingCodes":["692"],"borders":[],"capitalLatLng":[7.090992,171.381635],"latlng":[9,168],"demonym":"Marshallese","nativeName":"M̧ajeļ","altSpellings":["MH","Republic of the Marshall Islands","Aolepān Aorōkin M̧ajeļ"]},"MTQ":{"a3":"MTQ","a2":"MQ","name":"Martinique","capital":"Fort-de-France","population":386486,"area":0,"region":"Americas","subregion":"Caribbean","languages":["fr"],"currencies":["EUR"],"timezones":[],"tld":[".mq"],"callingCodes":["596"],"borders":[],"capitalLatLng":[14.602796,-61.067672],"latlng":[14.666667,-61],"demonym":"French","nativeName":"Martinique","altSpellings":["MQ"]},"MRT":{"a3":"MRT","a2":"MR","name":"Mauritania","capital":"Nouakchott","population":3545620,"area":1030700,"region":"Africa","subregion":"Western Africa","languages":["ar"],"currencies":["MRO"],"timezones":["UTC"],"tld":[".mr"],"callingCodes":["222"],"borders":["DZA","MLI","SEN","ESH"],"capitalLatLng":[18.079238,-15.978007],"latlng":[20,-12],"demonym":"Mauritanian","nativeName":"موريتانيا","altSpellings":["MR","Islamic Republic of Mauritania","al-Jumhūriyyah al-ʾIslāmiyyah al-Mūrītāniyyah"]},"MUS":{"a3":"MUS","a2":"MU","name":"Mauritius","capital":"Port Louis","population":1261208,"area":2040,"region":"Africa","subregion":"Eastern Africa","languages":["en"],"currencies":["MUR"],"timezones":["UTC+04:00"],"tld":[".mu"],"callingCodes":["230"],"borders":[],"capitalLatLng":[-20.163728,57.504533],"latlng":[-20.28333333,57.55],"demonym":"Mauritian","nativeName":"Maurice","altSpellings":["MU","Republic of Mauritius","République de Maurice"]},"MYT":{"a3":"MYT","a2":"YT","name":"Mayotte","capital":"Mamoudzou","population":212645,"area":0,"region":"Africa","subregion":"Eastern Africa","languages":["fr"],"currencies":["EUR"],"timezones":[],"tld":[".yt"],"callingCodes":["262"],"borders":[],"capitalLatLng":[-12.780586,45.227991],"latlng":[-12.83333333,45.16666666],"demonym":"French","nativeName":"Mayotte","altSpellings":["YT","Department of Mayotte","Département de Mayotte"]},"MEX":{"a3":"MEX","a2":"MX","name":"Mexico","capital":"Mexico City","population":119713203,"area":1964375,"region":"Americas","subregion":"Central America","languages":["es"],"currencies":["MXN"],"timezones":["UTC−08:00","UTC−07:00","UTC−06:00"],"tld":[".mx"],"callingCodes":["52"],"borders":["BLZ","GTM","USA"],"capitalLatLng":[19.43263,-99.133178],"latlng":[23,-102],"demonym":"Mexican","nativeName":"México","altSpellings":["MX","Mexicanos","United Mexican States","Estados Unidos Mexicanos"]},"FSM":{"a3":"FSM","a2":"FM","name":"Federated States of Micronesia","capital":"Palikir","population":101351,"area":702,"region":"Oceania","subregion":"Micronesia","languages":["en"],"currencies":["USD"],"timezones":["UTC+10:00","UTC+11"],"tld":[".fm"],"callingCodes":["691"],"borders":[],"capitalLatLng":[6.920744,158.162714],"latlng":[6.91666666,158.25],"demonym":"Micronesian","nativeName":"Micronesia","altSpellings":["FM","Federated States of Micronesia"]},"MDA":{"a3":"MDA","a2":"MD","name":"Moldova","capital":"Chișinău","population":3557600,"area":33846,"region":"Europe","subregion":"Eastern Europe","languages":["ro"],"currencies":["MDL"],"timezones":["UTC+02:00"],"tld":[".md"],"callingCodes":["373"],"borders":["ROU","UKR"],"capitalLatLng":[47.024471,28.832253],"latlng":[47,29],"demonym":"Moldovan","nativeName":"Moldova","altSpellings":["MD","Republic of Moldova","Republica Moldova"]},"MCO":{"a3":"MCO","a2":"MC","name":"Monaco","capital":"Monaco","population":36950,"area":2.02,"region":"Europe","subregion":"Western Europe","languages":["fr"],"currencies":["EUR"],"timezones":["UTC+01:00"],"tld":[".mc"],"callingCodes":["377"],"borders":["FRA"],"capitalLatLng":[43.732349,7.427683],"latlng":[43.73333333,7.4],"demonym":"Monegasque","nativeName":"Monaco","altSpellings":["MC","Principality of Monaco","Principauté de Monaco"]},"MNG":{"a3":"MNG","a2":"MN","name":"Mongolia","capital":"Ulan Bator","population":2987733,"area":1564110,"region":"Asia","subregion":"Eastern Asia","languages":["mn"],"currencies":["MNT"],"timezones":["UTC+07:00","UTC+08:00"],"tld":[".mn"],"callingCodes":["976"],"borders":["CHN","RUS"],"capitalLatLng":[47.918468,106.917702],"latlng":[46,105],"demonym":"Mongolian","nativeName":"Монгол улс","altSpellings":["MN"]},"MSR":{"a3":"MSR","a2":"MS","name":"Montserrat","capital":"Plymouth","population":4922,"area":102,"region":"Americas","subregion":"Caribbean","languages":["en"],"currencies":["XCD"],"timezones":[],"tld":[".ms"],"callingCodes":["1664"],"borders":[],"capitalLatLng":[50.371266,-4.142566],"latlng":[16.75,-62.2],"demonym":"Montserratian","nativeName":"Montserrat","altSpellings":["MS"]},"MAR":{"a3":"MAR","a2":"MA","name":"Morocco","capital":"Rabat","population":33465000,"area":446550,"region":"Africa","subregion":"Northern Africa","languages":["ar"],"currencies":["MAD"],"timezones":["UTC"],"tld":[".ma"],"callingCodes":["212"],"borders":["DZA","ESH","ESP"],"capitalLatLng":[34.022405,-6.834543],"latlng":[32,-5],"demonym":"Moroccan","nativeName":"المغرب","altSpellings":["MA","Kingdom of Morocco","Al-Mamlakah al-Maġribiyah"]},"MOZ":{"a3":"MOZ","a2":"MZ","name":"Mozambique","capital":"Maputo","population":25041922,"area":801590,"region":"Africa","subregion":"Eastern Africa","languages":["pt"],"currencies":["MZN"],"timezones":["UTC+02:00"],"tld":[".mz"],"callingCodes":["258"],"borders":["MWI","ZAF","SWZ","TZA","ZMB","ZWE"],"capitalLatLng":[-25.966213,32.56745],"latlng":[-18.25,35],"demonym":"Mozambican","nativeName":"Moçambique","altSpellings":["MZ","Republic of Mozambique","República de Moçambique"]},"NAM":{"a3":"NAM","a2":"NA","name":"Namibia","capital":"Windhoek","population":2113077,"area":825615,"region":"Africa","subregion":"Southern Africa","languages":["en","af"],"currencies":["NAD","ZAR"],"timezones":["UTC+01:00"],"tld":[".na"],"callingCodes":["264"],"borders":["AGO","BWA","ZAF","ZMB"],"capitalLatLng":[-22.574392,17.079069],"latlng":[-22,17],"demonym":"Namibian","nativeName":"Namibia","altSpellings":["NA","Namibië","Republic of Namibia"]},"NRU":{"a3":"NRU","a2":"NR","name":"Nauru","capital":"Yaren","population":10084,"area":21,"region":"Oceania","subregion":"Micronesia","languages":["en","na"],"currencies":["AUD"],"timezones":["UTC+12:00"],"tld":[".nr"],"callingCodes":["674"],"borders":[],"capitalLatLng":[-0.547101,166.9164],"latlng":[-0.53333333,166.91666666],"demonym":"Nauruan","nativeName":"Nauru","altSpellings":["NR","Naoero","Pleasant Island","Republic of Nauru","Ripublik Naoero"]},"NPL":{"a3":"NPL","a2":"NP","name":"Nepal","capital":"Kathmandu","population":27646053,"area":147181,"region":"Asia","subregion":"Southern Asia","languages":["ne"],"currencies":["NPR"],"timezones":["UTC+05:45"],"tld":[".np"],"callingCodes":["977"],"borders":["CHN","IND"],"capitalLatLng":[27.708317,85.320582],"latlng":[28,84],"demonym":"Nepalese","nativeName":"नेपाल","altSpellings":["NP","Federal Democratic Republic of Nepal","Loktāntrik Ganatantra Nepāl"]},"NLD":{"a3":"NLD","a2":"NL","name":"Netherlands","capital":"Amsterdam","population":16881000,"area":41850,"region":"Europe","subregion":"Western Europe","languages":["nl"],"currencies":["EUR"],"timezones":[],"tld":[".nl"],"callingCodes":["31"],"borders":["BEL","DEU"],"capitalLatLng":[52.37276,4.893604],"latlng":[52.5,5.75],"demonym":"Dutch","nativeName":"Nederland","altSpellings":["NL","Holland","Nederland"]},"ANT":{"a3":"ANT","a2":"","name":"Netherlands Antilles","capital":null,"population":0,"area":0,"region":null,"subregion":null,"languages":[],"currencies":[],"timezones":[],"tld":[],"callingCodes":[],"borders":[],"capitalLatLng":null,"latlng":null,"demonym":null,"nativeName":null,"altSpellings":[]},"NCL":{"a3":"NCL","a2":"NC","name":"New Caledonia","capital":"Nouméa","population":268767,"area":18575,"region":"Oceania","subregion":"Melanesia","languages":["fr"],"currencies":["XPF"],"timezones":[],"tld":[".nc"],"callingCodes":["687"],"borders":[],"capitalLatLng":[-22.274526,166.442419],"latlng":[-21.5,165.5],"demonym":"New Caledonian","nativeName":"Nouvelle-Calédonie","altSpellings":["NC"]},"NZL":{"a3":"NZL","a2":"NZ","name":"New Zealand","capital":"Wellington","population":4547900,"area":270467,"region":"Oceania","subregion":"Australia and New Zealand","languages":["en","mi"],"currencies":["NZD"],"timezones":["UTC−11:00","UTC−10:00","UTC+12:00","UTC+12:45","UTC+13:00"],"tld":[".nz"],"callingCodes":["64"],"borders":[],"capitalLatLng":[-41.288795,174.777211],"latlng":[-41,174],"demonym":"New Zealander","nativeName":"New Zealand","altSpellings":["NZ","Aotearoa"]},"NIC":{"a3":"NIC","a2":"NI","name":"Nicaragua","capital":"Managua","population":6134270,"area":130373,"region":"Americas","subregion":"Central America","languages":["es"],"currencies":["NIO"],"timezones":["UTC−06:00"],"tld":[".ni"],"callingCodes":["505"],"borders":["CRI","HND"],"capitalLatLng":[12.145991,-86.274666],"latlng":[13,-85],"demonym":"Nicaraguan","nativeName":"Nicaragua","altSpellings":["NI","Republic of Nicaragua","República de Nicaragua"]},"NER":{"a3":"NER","a2":"NE","name":"Niger","capital":"Niamey","population":17138707,"area":1267000,"region":"Africa","subregion":"Western Africa","languages":["fr"],"currencies":["XOF"],"timezones":["UTC+01:00"],"tld":[".ne"],"callingCodes":["227"],"borders":["DZA","BEN","BFA","TCD","LBY","MLI","NGA"],"capitalLatLng":[13.524834,2.109823],"latlng":[16,8],"demonym":"Nigerien","nativeName":"Niger","altSpellings":["NE","Nijar","Republic of Niger","République du Niger"]},"NGA":{"a3":"NGA","a2":"NG","name":"Nigeria","capital":"Abuja","population":178517000,"area":923768,"region":"Africa","subregion":"Western Africa","languages":["en"],"currencies":["NGN"],"timezones":["UTC+01:00"],"tld":[".ng"],"callingCodes":["234"],"borders":["BEN","CMR","TCD","NER"],"capitalLatLng":[9.06433,7.489297],"latlng":[10,8],"demonym":"Nigerian","nativeName":"Nigeria","altSpellings":["NG","Nijeriya","Naíjíríà","Federal Republic of Nigeria"]},"NIU":{"a3":"NIU","a2":"NU","name":"Niue","capital":"Alofi","population":1613,"area":260,"region":"Oceania","subregion":"Polynesia","languages":["en"],"currencies":["NZD"],"timezones":[],"tld":[".nu"],"callingCodes":["683"],"borders":[],"capitalLatLng":[-19.053416,-169.919199],"latlng":[-19.03333333,-169.86666666],"demonym":"Niuean","nativeName":"Niuē","altSpellings":["NU"]},"NFK":{"a3":"NFK","a2":"NF","name":"Norfolk Island","capital":"Kingston","population":2302,"area":36,"region":"Oceania","subregion":"Australia and New Zealand","languages":["en"],"currencies":["AUD"],"timezones":[],"tld":[".nf"],"callingCodes":["672"],"borders":[],"capitalLatLng":[17.971215,-76.792813],"latlng":[-29.03333333,167.95],"demonym":"Norfolk Islander","nativeName":"Norfolk Island","altSpellings":["NF","Territory of Norfolk Island","Teratri of Norf'k Ailen"]},"MNP":{"a3":"MNP","a2":"MP","name":"Northern Mariana Islands","capital":"Saipan","population":53883,"area":464,"region":"Oceania","subregion":"Micronesia","languages":["en","ch"],"currencies":["USD"],"timezones":[],"tld":[".mp"],"callingCodes":["1670"],"borders":[],"capitalLatLng":[15.190983,145.746853],"latlng":[15.2,145.75],"demonym":"American","nativeName":"Northern Mariana Islands","altSpellings":["MP","Commonwealth of the Northern Mariana Islands","Sankattan Siha Na Islas Mariånas"]},"NOR":{"a3":"NOR","a2":"NO","name":"Norway","capital":"Oslo","population":5156450,"area":323802,"region":"Europe","subregion":"Northern Europe","languages":["no","nb","nn"],"currencies":["NOK"],"timezones":["UTC+01:00"],"tld":[".no"],"callingCodes":["47"],"borders":["FIN","SWE","RUS"],"capitalLatLng":[59.91333,10.73897],"latlng":[62,10],"demonym":"Norwegian","nativeName":"Norge","altSpellings":["NO","Norge","Noreg","Kingdom of Norway","Kongeriket Norge","Kongeriket Noreg"]},"OMN":{"a3":"OMN","a2":"OM","name":"Oman","capital":"Muscat","population":4089076,"area":309500,"region":"Asia","subregion":"Western Asia","languages":["ar"],"currencies":["OMR"],"timezones":["UTC+04:00"],"tld":[".om"],"callingCodes":["968"],"borders":["SAU","ARE","YEM"],"capitalLatLng":[23.599786,58.54513],"latlng":[21,57],"demonym":"Omani","nativeName":"عمان","altSpellings":["OM","Sultanate of Oman","Salṭanat ʻUmān"]},"PAK":{"a3":"PAK","a2":"PK","name":"Pakistan","capital":"Islamabad","population":188410000,"area":881912,"region":"Asia","subregion":"Southern Asia","languages":["en","ur"],"currencies":["PKR"],"timezones":["UTC+05:00"],"tld":[".pk"],"callingCodes":["92"],"borders":["AFG","CHN","IND","IRN"],"capitalLatLng":[33.693812,73.065151],"latlng":[30,70],"demonym":"Pakistani","nativeName":"Pakistan","altSpellings":["PK","Pākistān","Islamic Republic of Pakistan","Islāmī Jumhūriya'eh Pākistān"]},"PLW":{"a3":"PLW","a2":"PW","name":"Palau","capital":"Ngerulmud","population":20901,"area":459,"region":"Oceania","subregion":"Micronesia","languages":["en"],"currencies":["USD"],"timezones":["UTC+09:00"],"tld":[".pw"],"callingCodes":["680"],"borders":[],"capitalLatLng":[7.500619,134.624301],"latlng":[7.5,134.5],"demonym":"Palauan","nativeName":"Palau","altSpellings":["PW","Republic of Palau","Beluu er a Belau"]},"PAN":{"a3":"PAN","a2":"PA","name":"Panama","capital":"Panama City","population":3713312,"area":75417,"region":"Americas","subregion":"Central America","languages":["es"],"currencies":["PAB","USD"],"timezones":["UTC−05:00"],"tld":[".pa"],"callingCodes":["507"],"borders":["COL","CRI"],"capitalLatLng":[8.971449,-79.53418],"latlng":[9,-80],"demonym":"Panamanian","nativeName":"Panamá","altSpellings":["PA","Republic of Panama","República de Panamá"]},"PNG":{"a3":"PNG","a2":"PG","name":"Papua New Guinea","capital":"Port Moresby","population":7398500,"area":462840,"region":"Oceania","subregion":"Melanesia","languages":["en"],"currencies":["PGK"],"timezones":["UTC+10:00"],"tld":[".pg"],"callingCodes":["675"],"borders":["IDN"],"capitalLatLng":[-9.47433,147.15995],"latlng":[-6,147],"demonym":"Papua New Guinean","nativeName":"Papua Niugini","altSpellings":["PG","Independent State of Papua New Guinea","Independen Stet bilong Papua Niugini"]},"PRY":{"a3":"PRY","a2":"PY","name":"Paraguay","capital":"Asunción","population":6893727,"area":406752,"region":"Americas","subregion":"South America","languages":["es","gn"],"currencies":["PYG"],"timezones":["UTC−04:00"],"tld":[".py"],"callingCodes":["595"],"borders":["ARG","BOL","BRA"],"capitalLatLng":[-25.280046,-57.634381],"latlng":[-23,-58],"demonym":"Paraguayan","nativeName":"Paraguay","altSpellings":["PY","Republic of Paraguay","República del Paraguay","Tetã Paraguái"]},"PER":{"a3":"PER","a2":"PE","name":"Peru","capital":"Lima","population":30814175,"area":1285216,"region":"Americas","subregion":"South America","languages":["es"],"currencies":["PEN"],"timezones":["UTC−05:00"],"tld":[".pe"],"callingCodes":["51"],"borders":["BOL","BRA","CHL","COL","ECU"],"capitalLatLng":[-12.062106,-77.036526],"latlng":[-10,-76],"demonym":"Peruvian","nativeName":"Perú","altSpellings":["PE","Republic of Peru"," República del Perú"]},"PHL":{"a3":"PHL","a2":"PH","name":"Philippines","capital":"Manila","population":100697400,"area":342353,"region":"Asia","subregion":"South-Eastern Asia","languages":["en"],"currencies":["PHP"],"timezones":["UTC+08:00"],"tld":[".ph"],"callingCodes":["63"],"borders":[],"capitalLatLng":[14.590622,120.97997],"latlng":[13,122],"demonym":"Filipino","nativeName":"Pilipinas","altSpellings":["PH","Republic of the Philippines","Repúblika ng Pilipinas"]},"PCN":{"a3":"PCN","a2":"PN","name":"Pitcairn Islands","capital":"Adamstown","population":56,"area":47,"region":"Oceania","subregion":"Polynesia","languages":["en"],"currencies":["NZD"],"timezones":[],"tld":[".pn"],"callingCodes":["64"],"borders":[],"capitalLatLng":[-25.066667,-130.100205],"latlng":[-25.06666666,-130.1],"demonym":"Pitcairn Islander","nativeName":"Pitcairn Islands","altSpellings":["PN","Pitcairn Henderson Ducie and Oeno Islands"]},"POL":{"a3":"POL","a2":"PL","name":"Poland","capital":"Warsaw","population":38496000,"area":312679,"region":"Europe","subregion":"Eastern Europe","languages":["pl"],"currencies":["PLN"],"timezones":["UTC+01:00"],"tld":[".pl"],"callingCodes":["48"],"borders":["BLR","CZE","DEU","LTU","RUS","SVK","UKR"],"capitalLatLng":[52.233717,21.071411],"latlng":[52,20],"demonym":"Polish","nativeName":"Polska","altSpellings":["PL","Republic of Poland","Rzeczpospolita Polska"]},"PRT":{"a3":"PRT","a2":"PT","name":"Portugal","capital":"Lisbon","population":10477800,"area":92090,"region":"Europe","subregion":"Southern Europe","languages":["pt"],"currencies":["EUR"],"timezones":["UTC−01:00","UTC"],"tld":[".pt"],"callingCodes":["351"],"borders":["ESP"],"capitalLatLng":[38.707751,-9.136592],"latlng":[39.5,-8],"demonym":"Portuguese","nativeName":"Portugal","altSpellings":["PT","Portuguesa","Portuguese Republic","República Portuguesa"]},"PRI":{"a3":"PRI","a2":"PR","name":"Puerto Rico","capital":"San Juan","population":3615086,"area":8870,"region":"Americas","subregion":"Caribbean","languages":["es","en"],"currencies":["USD"],"timezones":[],"tld":[".pr"],"callingCodes":["1787","1939"],"borders":[],"capitalLatLng":[18.465299,-66.116666],"latlng":[18.25,-66.5],"demonym":"Puerto Rican","nativeName":"Puerto Rico","altSpellings":["PR","Commonwealth of Puerto Rico","Estado Libre Asociado de Puerto Rico"]},"QAT":{"a3":"QAT","a2":"QA","name":"Qatar","capital":"Doha","population":2269672,"area":11586,"region":"Asia","subregion":"Western Asia","languages":["ar"],"currencies":["QAR"],"timezones":["UTC+03:00"],"tld":[".qa"],"callingCodes":["974"],"borders":["SAU"],"capitalLatLng":[25.285633,51.526416],"latlng":[25.5,51.25],"demonym":"Qatari","nativeName":"قطر","altSpellings":["QA","State of Qatar","Dawlat Qaṭar"]},"REU":{"a3":"REU","a2":"RE","name":"Réunion","capital":"Saint-Denis","population":840974,"area":0,"region":"Africa","subregion":"Eastern Africa","languages":["fr"],"currencies":["EUR"],"timezones":[],"tld":[".re"],"callingCodes":["262"],"borders":[],"capitalLatLng":[48.935773,2.358023],"latlng":[-21.15,55.5],"demonym":"French","nativeName":"La Réunion","altSpellings":["RE","Reunion"]},"ROU":{"a3":"ROU","a2":"RO","name":"Romania","capital":"Bucharest","population":19942642,"area":238391,"region":"Europe","subregion":"Eastern Europe","languages":["ro"],"currencies":["RON"],"timezones":["UTC+02:00"],"tld":[".ro"],"callingCodes":["40"],"borders":["BGR","HUN","MDA","SRB","UKR"],"capitalLatLng":[44.436141,26.10272],"latlng":[46,25],"demonym":"Romanian","nativeName":"România","altSpellings":["RO","Rumania","Roumania","România"]},"RUS":{"a3":"RUS","a2":"RU","name":"Russia","capital":"Moscow","population":146233000,"area":17124442,"region":"Europe","subregion":"Eastern Europe","languages":["ru"],"currencies":["RUB"],"timezones":["UTC+03:00","UTC+04:00","UTC+06:00","UTC+07:00","UTC+08:00","UTC+09:00","UTC+10:00","UTC+11:00","UTC+12:00"],"tld":[".ru"],"callingCodes":["7"],"borders":["AZE","BLR","CHN","EST","FIN","GEO","KAZ","PRK","LVA","LTU","MNG","NOR","POL","UKR"],"capitalLatLng":[55.750446,37.617494],"latlng":[60,100],"demonym":"Russian","nativeName":"Россия","altSpellings":["RU","Rossiya","Russian Federation","Российская Федерация","Rossiyskaya Federatsiya"]},"RWA":{"a3":"RWA","a2":"RW","name":"Rwanda","capital":"Kigali","population":10996891,"area":26338,"region":"Africa","subregion":"Eastern Africa","languages":["rw","en","fr"],"currencies":["RWF"],"timezones":["UTC+02:00"],"tld":[".rw"],"callingCodes":["250"],"borders":["BDI","COD","TZA","UGA"],"capitalLatLng":[-1.88596,30.129675],"latlng":[-2,30],"demonym":"Rwandan","nativeName":"Rwanda","altSpellings":["RW","Republic of Rwanda","Repubulika y'u Rwanda","République du Rwanda"]},"SHN":{"a3":"SHN","a2":"SH","name":"Saint Helena","capital":"Jamestown","population":4255,"area":0,"region":"Africa","subregion":"Western Africa","languages":["en"],"currencies":["SHP"],"timezones":[],"tld":[".sh"],"callingCodes":["290"],"borders":[],"capitalLatLng":[37.210443,-76.773893],"latlng":[-15.95,-5.7],"demonym":"Saint Helenian","nativeName":"Saint Helena","altSpellings":["SH"]},"KNA":{"a3":"KNA","a2":"KN","name":"Saint Kitts and Nevis","capital":"Basseterre","population":55000,"area":261,"region":"Americas","subregion":"Caribbean","languages":["en"],"currencies":["XCD"],"timezones":["UTC−04:00"],"tld":[".kn"],"callingCodes":["1869"],"borders":[],"capitalLatLng":[17.296092,-62.722301],"latlng":[17.33333333,-62.75],"demonym":"Kittian and Nevisian","nativeName":"Saint Kitts and Nevis","altSpellings":["KN","Federation of Saint Christopher and Nevis"]},"LCA":{"a3":"LCA","a2":"LC","name":"Saint Lucia","capital":"Castries","population":184000,"area":616,"region":"Americas","subregion":"Caribbean","languages":["en"],"currencies":["XCD"],"timezones":["UTC−04:00"],"tld":[".lc"],"callingCodes":["1758"],"borders":[],"capitalLatLng":[13.952589,-60.987824],"latlng":[13.88333333,-60.96666666],"demonym":"Saint Lucian","nativeName":"Saint Lucia","altSpellings":["LC"]},"SPM":{"a3":"SPM","a2":"PM","name":"Saint Pierre and Miquelon","capital":"Saint-Pierre","population":6081,"area":242,"region":"Americas","subregion":"Northern America","languages":["fr"],"currencies":["EUR"],"timezones":[],"tld":[".pm"],"callingCodes":["508"],"borders":[],"capitalLatLng":[48.383272,7.471873],"latlng":[46.83333333,-56.33333333],"demonym":"French","nativeName":"Saint-Pierre-et-Miquelon","altSpellings":["PM","Collectivité territoriale de Saint-Pierre-et-Miquelon"]},"VCT":{"a3":"VCT","a2":"VC","name":"Saint Vincent and the Grenadines","capital":"Kingstown","population":109000,"area":389,"region":"Americas","subregion":"Caribbean","languages":["en"],"currencies":["XCD"],"timezones":["UTC−04:00"],"tld":[".vc"],"callingCodes":["1784"],"borders":[],"capitalLatLng":[13.156186,-61.227962],"latlng":[13.25,-61.2],"demonym":"Saint Vincentian","nativeName":"Saint Vincent and the Grenadines","altSpellings":["VC"]},"WSM":{"a3":"WSM","a2":"WS","name":"Samoa","capital":"Apia","population":187820,"area":2842,"region":"Oceania","subregion":"Polynesia","languages":["sm","en"],"currencies":["WST"],"timezones":["UTC+13:00"],"tld":[".ws"],"callingCodes":["685"],"borders":[],"capitalLatLng":[-13.834369,-171.769279],"latlng":[-13.58333333,-172.33333333],"demonym":"Samoan","nativeName":"Samoa","altSpellings":["WS","Independent State of Samoa","Malo Saʻoloto Tutoʻatasi o Sāmoa"]},"SMR":{"a3":"SMR","a2":"SM","name":"San Marino","capital":"City of San Marino","population":32743,"area":61,"region":"Europe","subregion":"Southern Europe","languages":["it"],"currencies":["EUR"],"timezones":["UTC+01:00"],"tld":[".sm"],"callingCodes":["378"],"borders":["ITA"],"capitalLatLng":[43.9364,12.446699],"latlng":[43.76666666,12.41666666],"demonym":"Sammarinese","nativeName":"San Marino","altSpellings":["SM","Republic of San Marino","Repubblica di San Marino"]},"STP":{"a3":"STP","a2":"ST","name":"São Tomé and Príncipe","capital":"São Tomé","population":187356,"area":964,"region":"Africa","subregion":"Middle Africa","languages":["pt"],"currencies":["STD"],"timezones":["UTC"],"tld":[".st"],"callingCodes":["239"],"borders":[],"capitalLatLng":[0.338924,6.731303],"latlng":[1,7],"demonym":"Sao Tomean","nativeName":"São Tomé e Príncipe","altSpellings":["ST","Democratic Republic of São Tomé and Príncipe","República Democrática de São Tomé e Príncipe"]},"SAU":{"a3":"SAU","a2":"SA","name":"Saudi Arabia","capital":"Riyadh","population":30770375,"area":2149690,"region":"Asia","subregion":"Western Asia","languages":["ar"],"currencies":["SAR"],"timezones":["UTC+03:00"],"tld":[".sa"],"callingCodes":["966"],"borders":["IRQ","JOR","KWT","OMN","QAT","ARE","YEM"],"capitalLatLng":[24.631969,46.715065],"latlng":[25,45],"demonym":"Saudi Arabian","nativeName":"العربية السعودية","altSpellings":["SA","Kingdom of Saudi Arabia","Al-Mamlakah al-‘Arabiyyah as-Su‘ūdiyyah"]},"SEN":{"a3":"SEN","a2":"SN","name":"Senegal","capital":"Dakar","population":13508715,"area":196722,"region":"Africa","subregion":"Western Africa","languages":["fr"],"currencies":["XOF"],"timezones":["UTC"],"tld":[".sn"],"callingCodes":["221"],"borders":["GMB","GIN","GNB","MLI","MRT"],"capitalLatLng":[14.693425,-17.447938],"latlng":[14,-14],"demonym":"Senegalese","nativeName":"Sénégal","altSpellings":["SN","Republic of Senegal","République du Sénégal"]},"SRB":{"a3":"SRB","a2":"RS","name":"Serbia","capital":"Belgrade","population":7186862,"area":49037,"region":"Europe","subregion":"Eastern Europe","languages":["rs"],"currencies":["RSD"],"timezones":["UTC+01:00","UTC+02:00"],"tld":[".rs"],"callingCodes":["381"],"borders":["HUN","ROU","BGR","MKD","HRV","BIH","MNE","ALB","XKX"],"capitalLatLng":[44.817813,20.456897],"latlng":[44.1305021,16.4284181],"demonym":"Serbian","nativeName":"Srbija","altSpellings":["Srbija","Republic of Serbia","Republika Srbija"]},"SYC":{"a3":"SYC","a2":"SC","name":"Seychelles","capital":"Victoria","population":89949,"area":452,"region":"Africa","subregion":"Eastern Africa","languages":["fr","en"],"currencies":["SCR"],"timezones":["UTC+04:00"],"tld":[".sc"],"callingCodes":["248"],"borders":[],"capitalLatLng":[-36.59861,144.678005],"latlng":[-4.58333333,55.66666666],"demonym":"Seychellois","nativeName":"Seychelles","altSpellings":["SC","Republic of Seychelles","Repiblik Sesel","République des Seychelles"]},"SLE":{"a3":"SLE","a2":"SL","name":"Sierra Leone","capital":"Freetown","population":6205000,"area":71740,"region":"Africa","subregion":"Western Africa","languages":["en"],"currencies":["SLL"],"timezones":["UTC"],"tld":[".sl"],"callingCodes":["232"],"borders":["GIN","LBR"],"capitalLatLng":[8.479004,-13.26795],"latlng":[8.5,-11.5],"demonym":"Sierra Leonean","nativeName":"Sierra Leone","altSpellings":["SL","Republic of Sierra Leone"]},"SGP":{"a3":"SGP","a2":"SG","name":"Singapore","capital":"Singapore","population":5469700,"area":710,"region":"Asia","subregion":"South-Eastern Asia","languages":["en","ms","ta","zh"],"currencies":["SGD"],"timezones":["UTC+08:00"],"tld":[".sg"],"callingCodes":["65"],"borders":[],"capitalLatLng":[1.357107,103.819499],"latlng":[1.36666666,103.8],"demonym":"Singaporean","nativeName":"Singapore","altSpellings":["SG","Singapura","Republik Singapura","新加坡共和国"]},"SVK":{"a3":"SVK","a2":"SK","name":"Slovakia","capital":"Bratislava","population":5415949,"area":49037,"region":"Europe","subregion":"Eastern Europe","languages":["sk"],"currencies":["EUR"],"timezones":["UTC+01:00"],"tld":[".sk"],"callingCodes":["421"],"borders":["AUT","CZE","HUN","POL","UKR"],"capitalLatLng":[48.151699,17.109306],"latlng":[48.66666666,19.5],"demonym":"Slovak","nativeName":"Slovensko","altSpellings":["SK","Slovak Republic","Slovenská republika"]},"SVN":{"a3":"SVN","a2":"SI","name":"Slovenia","capital":"Ljubljana","population":2064966,"area":20273,"region":"Europe","subregion":"Southern Europe","languages":["sl"],"currencies":["EUR"],"timezones":["UTC+01:00"],"tld":[".si"],"callingCodes":["386"],"borders":["AUT","HRV","ITA","HUN"],"capitalLatLng":[46.04998,14.50686],"latlng":[46.11666666,14.81666666],"demonym":"Slovene","nativeName":"Slovenija","altSpellings":["SI","Republic of Slovenia","Republika Slovenija"]},"SLB":{"a3":"SLB","a2":"SB","name":"Solomon Islands","capital":"Honiara","population":581344,"area":28896,"region":"Oceania","subregion":"Melanesia","languages":["en"],"currencies":["SBD"],"timezones":["UTC+11:00"],"tld":[".sb"],"callingCodes":["677"],"borders":[],"capitalLatLng":[-9.431077,159.955255],"latlng":[-8,159],"demonym":"Solomon Islander","nativeName":"Solomon Islands","altSpellings":["SB"]},"SOM":{"a3":"SOM","a2":"SO","name":"Somalia","capital":"Mogadishu","population":10806000,"area":637657,"region":"Africa","subregion":"Eastern Africa","languages":["so","ar"],"currencies":["SOS"],"timezones":["UTC+03:00"],"tld":[".so"],"callingCodes":["252"],"borders":["DJI","ETH","KEN"],"capitalLatLng":[2.042778,45.338564],"latlng":[10,49],"demonym":"Somali","nativeName":"Soomaaliya","altSpellings":["SO","aṣ-Ṣūmāl","Federal Republic of Somalia","Jamhuuriyadda Federaalka Soomaaliya","Jumhūriyyat aṣ-Ṣūmāl al-Fiderāliyya"]},"ZAF":{"a3":"ZAF","a2":"ZA","name":"South Africa","capital":"Pretoria","population":54002000,"area":1221037,"region":"Africa","subregion":"Southern Africa","languages":["af","en","nr","st","ss","tn","ts","ve","xh","zu"],"currencies":["ZAR"],"timezones":["UTC+02:00"],"tld":[".za"],"callingCodes":["27"],"borders":["BWA","LSO","MOZ","NAM","SWZ","ZWE"],"capitalLatLng":[-25.745937,28.187944],"latlng":[-29,24],"demonym":"South African","nativeName":"South Africa","altSpellings":["ZA","RSA","Suid-Afrika","Republic of South Africa"]},"SGS":{"a3":"SGS","a2":"GS","name":"South Georgia","capital":"King Edward Point","population":30,"area":0,"region":"Americas","subregion":"South America","languages":["en"],"currencies":["GBP"],"timezones":[],"tld":[".gs"],"callingCodes":["500"],"borders":[],"capitalLatLng":[-54.283545,-36.494636],"latlng":[-54.5,-37],"demonym":"South Georgia and the South Sandwich Islander","nativeName":"South Georgia","altSpellings":["GS","South Georgia and the South Sandwich Islands"]},"SSD":{"a3":"SSD","a2":"SS","name":"South Sudan","capital":"Juba","population":11384393,"area":619745,"region":"Africa","subregion":"Middle Africa","languages":["en"],"currencies":["SSP"],"timezones":["UTC+03:00"],"tld":[".ss"],"callingCodes":["211"],"borders":["CAF","COD","ETH","KEN","SDN","UGA"],"capitalLatLng":[4.847202,31.595166],"latlng":[7,30],"demonym":"South Sudanese","nativeName":"South Sudan","altSpellings":["SS"]},"ESP":{"a3":"ESP","a2":"ES","name":"Spain","capital":"Madrid","population":46507760,"area":505992,"region":"Europe","subregion":"Southern Europe","languages":["es"],"currencies":["EUR"],"timezones":["UTC","UTC+01:00"],"tld":[".es"],"callingCodes":["34"],"borders":["AND","FRA","GIB","PRT","MAR"],"capitalLatLng":[40.416705,-3.703582],"latlng":[40,-4],"demonym":"Spanish","nativeName":"España","altSpellings":["ES","Kingdom of Spain","Reino de España"]},"LKA":{"a3":"LKA","a2":"LK","name":"Sri Lanka","capital":"Colombo","population":20277597,"area":65610,"region":"Asia","subregion":"Southern Asia","languages":["si","ta"],"currencies":["LKR"],"timezones":["UTC+05:30"],"tld":[".lk"],"callingCodes":["94"],"borders":["IND"],"capitalLatLng":[6.934997,79.853846],"latlng":[7,81],"demonym":"Sri Lankan","nativeName":"śrī laṃkāva","altSpellings":["LK","ilaṅkai","Democratic Socialist Republic of Sri Lanka"]},"SDN":{"a3":"SDN","a2":"SD","name":"Sudan","capital":"Khartoum","population":37289406,"area":1886068,"region":"Africa","subregion":"Northern Africa","languages":["ar","en"],"currencies":["SDG"],"timezones":["UTC+03:00"],"tld":[".sd"],"callingCodes":["249"],"borders":["CAF","TCD","EGY","ERI","ETH","LBY","SSD"],"capitalLatLng":[15.593325,32.53565],"latlng":[15,30],"demonym":"Sudanese","nativeName":"السودان","altSpellings":["SD","Republic of the Sudan","Jumhūrīyat as-Sūdān"]},"SUR":{"a3":"SUR","a2":"SR","name":"Suriname","capital":"Paramaribo","population":534189,"area":163820,"region":"Americas","subregion":"South America","languages":["nl"],"currencies":["SRD"],"timezones":["UTC−03:00"],"tld":[".sr"],"callingCodes":["597"],"borders":["BRA","GUF","FRA","GUY"],"capitalLatLng":[5.821609,-55.177043],"latlng":[4,-56],"demonym":"Surinamer","nativeName":"Suriname","altSpellings":["SR","Sarnam","Sranangron","Republic of Suriname","Republiek Suriname"]},"SJM":{"a3":"SJM","a2":"SJ","name":"Svalbard and Jan Mayen","capital":"Longyearbyen","population":2562,"area":0,"region":"Europe","subregion":"Northern Europe","languages":["no"],"currencies":["NOK"],"timezones":[],"tld":[".sj"],"callingCodes":["4779"],"borders":[],"capitalLatLng":[78.223156,15.646366],"latlng":[78,20],"demonym":"Norwegian","nativeName":"Svalbard og Jan Mayen","altSpellings":["SJ","Svalbard and Jan Mayen Islands"]},"SWZ":{"a3":"SWZ","a2":"SZ","name":"Swaziland","capital":"Lobamba","population":1106189,"area":17364,"region":"Africa","subregion":"Southern Africa","languages":["en","ss"],"currencies":["SZL"],"timezones":["UTC+02:00"],"tld":[".sz"],"callingCodes":["268"],"borders":["MOZ","ZAF"],"capitalLatLng":[-26.446285,31.208378],"latlng":[-26.5,31.5],"demonym":"Swazi","nativeName":"Swaziland","altSpellings":["SZ","weSwatini","Swatini","Ngwane","Kingdom of Swaziland","Umbuso waseSwatini"]},"SWE":{"a3":"SWE","a2":"SE","name":"Sweden","capital":"Stockholm","population":9737521,"area":450295,"region":"Europe","subregion":"Northern Europe","languages":["sv"],"currencies":["SEK"],"timezones":["UTC+01:00"],"tld":[".se"],"callingCodes":["46"],"borders":["FIN","NOR"],"capitalLatLng":[59.325117,18.071094],"latlng":[62,15],"demonym":"Swedish","nativeName":"Sverige","altSpellings":["SE","Kingdom of Sweden","Konungariket Sverige"]},"CHE":{"a3":"CHE","a2":"CH","name":"Switzerland","capital":"Bern","population":8183800,"area":41284,"region":"Europe","subregion":"Western Europe","languages":["de","fr","it"],"currencies":["CHE","CHF","CHW"],"timezones":["UTC+01:00"],"tld":[".ch"],"callingCodes":["41"],"borders":["AUT","FRA","ITA","LIE","DEU"],"capitalLatLng":[46.948271,7.451451],"latlng":[47,8],"demonym":"Swiss","nativeName":"Schweiz","altSpellings":["CH","Swiss Confederation","Schweiz","Suisse","Svizzera","Svizra"]},"SYR":{"a3":"SYR","a2":"SY","name":"Syria","capital":"Damascus","population":22964324,"area":185180,"region":"Asia","subregion":"Western Asia","languages":["ar"],"currencies":["SYP"],"timezones":["UTC+02:00"],"tld":[".sy"],"callingCodes":["963"],"borders":["IRQ","ISR","JOR","LBN","TUR"],"capitalLatLng":[33.51307,36.309581],"latlng":[35,38],"demonym":"Syrian","nativeName":"سوريا","altSpellings":["SY","Syrian Arab Republic","Al-Jumhūrīyah Al-ʻArabīyah As-Sūrīyah"]},"TWN":{"a3":"TWN","a2":"TW","name":"Taiwan","capital":"Taipei","population":23424615,"area":36193,"region":"Asia","subregion":"Eastern Asia","languages":["zh"],"currencies":["TWD"],"timezones":["UTC+08:00"],"tld":[".tw"],"callingCodes":["886"],"borders":[],"capitalLatLng":[25.03752,121.56368],"latlng":[23.5,121],"demonym":"Taiwanese","nativeName":"臺灣","altSpellings":["TW","Táiwān","Republic of China","中華民國","Zhōnghuá Mínguó"]},"TJK":{"a3":"TJK","a2":"TJ","name":"Tajikistan","capital":"Dushanbe","population":8161000,"area":143100,"region":"Asia","subregion":"Central Asia","languages":["tg","ru"],"currencies":["TJS"],"timezones":["UTC+05:00"],"tld":[".tj"],"callingCodes":["992"],"borders":["AFG","CHN","KGZ","UZB"],"capitalLatLng":[38.542584,68.815214],"latlng":[39,71],"demonym":"Tadzhik","nativeName":"Тоҷикистон","altSpellings":["TJ","Toçikiston","Republic of Tajikistan","Ҷумҳурии Тоҷикистон","Çumhuriyi Toçikiston"]},"TZA":{"a3":"TZA","a2":"TZ","name":"Tanzania","capital":"Dodoma","population":47421786,"area":945087,"region":"Africa","subregion":"Eastern Africa","languages":["sw","en"],"currencies":["TZS"],"timezones":["UTC+03:00"],"tld":[".tz"],"callingCodes":["255"],"borders":["BDI","COD","KEN","MWI","MOZ","RWA","UGA","ZMB"],"capitalLatLng":[-6.337282,35.737177],"latlng":[-6,35],"demonym":"Tanzanian","nativeName":"Tanzania","altSpellings":["TZ","United Republic of Tanzania","Jamhuri ya Muungano wa Tanzania"]},"THA":{"a3":"THA","a2":"TH","name":"Thailand","capital":"Bangkok","population":64871000,"area":513120,"region":"Asia","subregion":"South-Eastern Asia","languages":["th"],"currencies":["THB"],"timezones":["UTC+07:00"],"tld":[".th"],"callingCodes":["66"],"borders":["MMR","KHM","LAO","MYS"],"capitalLatLng":[13.754253,100.493087],"latlng":[15,100],"demonym":"Thai","nativeName":"ประเทศไทย","altSpellings":["TH","Prathet","Thai","Kingdom of Thailand","ราชอาณาจักรไทย","Ratcha Anachak Thai"]},"TLS":{"a3":"TLS","a2":"TL","name":"East Timor","capital":"Dili","population":1172390,"area":14874,"region":"Asia","subregion":"South-Eastern Asia","languages":["pt"],"currencies":["USD"],"timezones":["UTC+09:00"],"tld":[".tl"],"callingCodes":["670"],"borders":["IDN"],"capitalLatLng":[28.651718,77.221939],"latlng":[-8.83333333,125.91666666],"demonym":"East Timorese","nativeName":"Timor-Leste","altSpellings":["TL","East Timor","Democratic Republic of Timor-Leste","República Democrática de Timor-Leste","Repúblika Demokrátika Timór-Leste"]},"TGO":{"a3":"TGO","a2":"TG","name":"Togo","capital":"Lomé","population":6993000,"area":56785,"region":"Africa","subregion":"Western Africa","languages":["fr"],"currencies":["XOF"],"timezones":["UTC"],"tld":[".tg"],"callingCodes":["228"],"borders":["BEN","BFA","GHA"],"capitalLatLng":[6.130419,1.215829],"latlng":[8,1.16666666],"demonym":"Togolese","nativeName":"Togo","altSpellings":["TG","Togolese","Togolese Republic","République Togolaise"]},"TKL":{"a3":"TKL","a2":"TK","name":"Tokelau","capital":"Fakaofo","population":1411,"area":12,"region":"Oceania","subregion":"Polynesia","languages":["en"],"currencies":["NZD"],"timezones":[],"tld":[".tk"],"callingCodes":["690"],"borders":[],"capitalLatLng":[-9.374305,-171.264536],"latlng":[-9,-172],"demonym":"Tokelauan","nativeName":"Tokelau","altSpellings":["TK"]},"TON":{"a3":"TON","a2":"TO","name":"Tonga","capital":"Nuku'alofa","population":103252,"area":747,"region":"Oceania","subregion":"Polynesia","languages":["en","to"],"currencies":["TOP"],"timezones":["UTC+13:00"],"tld":[".to"],"callingCodes":["676"],"borders":[],"capitalLatLng":[-21.13434,-175.201808],"latlng":[-20,-175],"demonym":"Tongan","nativeName":"Tonga","altSpellings":["TO"]},"TTO":{"a3":"TTO","a2":"TT","name":"Trinidad and Tobago","capital":"Port of Spain","population":1328019,"area":5130,"region":"Americas","subregion":"Caribbean","languages":["en"],"currencies":["TTD"],"timezones":["UTC−04:00"],"tld":[".tt"],"callingCodes":["1868"],"borders":[],"capitalLatLng":[10.657268,-61.518017],"latlng":[11,-61],"demonym":"Trinidadian","nativeName":"Trinidad and Tobago","altSpellings":["TT","Republic of Trinidad and Tobago"]},"TUN":{"a3":"TUN","a2":"TN","name":"Tunisia","capital":"Tunis","population":10982754,"area":163610,"region":"Africa","subregion":"Northern Africa","languages":["ar"],"currencies":["TND"],"timezones":["UTC+01:00"],"tld":[".tn"],"callingCodes":["216"],"borders":["DZA","LBY"],"capitalLatLng":[33.843941,9.400138],"latlng":[34,9],"demonym":"Tunisian","nativeName":"تونس","altSpellings":["TN","Republic of Tunisia","al-Jumhūriyyah at-Tūnisiyyah"]},"TUR":{"a3":"TUR","a2":"TR","name":"Turkey","capital":"Ankara","population":76667864,"area":783562,"region":"Asia","subregion":"Western Asia","languages":["tr"],"currencies":["TRY"],"timezones":["UTC+02:00"],"tld":[".tr"],"callingCodes":["90"],"borders":["ARM","AZE","BGR","GEO","GRC","IRN","IRQ","SYR"],"capitalLatLng":[39.920777,32.854067],"latlng":[39,35],"demonym":"Turkish","nativeName":"Türkiye","altSpellings":["TR","Turkiye","Republic of Turkey","Türkiye Cumhuriyeti"]},"TKM":{"a3":"TKM","a2":"TM","name":"Turkmenistan","capital":"Ashgabat","population":5838064,"area":488100,"region":"Asia","subregion":"Central Asia","languages":["tk","ru"],"currencies":["TMT"],"timezones":["UTC+05:00"],"tld":[".tm"],"callingCodes":["993"],"borders":["AFG","IRN","KAZ","UZB"],"capitalLatLng":[37.939668,58.387426],"latlng":[40,60],"demonym":"Turkmen","nativeName":"Türkmenistan","altSpellings":["TM"]},"TUV":{"a3":"TUV","a2":"TV","name":"Tuvalu","capital":"Funafuti","population":11323,"area":26,"region":"Oceania","subregion":"Polynesia","languages":["en"],"currencies":["AUD"],"timezones":["UTC+12:00"],"tld":[".tv"],"callingCodes":["688"],"borders":[],"capitalLatLng":[-8.534995,179.11865],"latlng":[-8,178],"demonym":"Tuvaluan","nativeName":"Tuvalu","altSpellings":["TV"]},"UGA":{"a3":"UGA","a2":"UG","name":"Uganda","capital":"Kampala","population":34856813,"area":241550,"region":"Africa","subregion":"Eastern Africa","languages":["en","sw"],"currencies":["UGX"],"timezones":["UTC+03:00"],"tld":[".ug"],"callingCodes":["256"],"borders":["COD","KEN","RWA","SSD","TZA"],"capitalLatLng":[0.317714,32.581354],"latlng":[1,32],"demonym":"Ugandan","nativeName":"Uganda","altSpellings":["UG","Republic of Uganda","Jamhuri ya Uganda"]},"UKR":{"a3":"UKR","a2":"UA","name":"Ukraine","capital":"Kiev","population":42973696,"area":603700,"region":"Europe","subregion":"Eastern Europe","languages":["uk"],"currencies":["UAH"],"timezones":["UTC+02:00"],"tld":[".ua"],"callingCodes":["380"],"borders":["BLR","HUN","MDA","POL","ROU","RUS","SVK"],"capitalLatLng":[50.450034,30.524136],"latlng":[49,32],"demonym":"Ukrainian","nativeName":"Україна","altSpellings":["UA","Ukrayina"]},"ARE":{"a3":"ARE","a2":"AE","name":"United Arab Emirates","capital":"Abu Dhabi","population":9446000,"area":83600,"region":"Asia","subregion":"Western Asia","languages":["ar"],"currencies":["AED"],"timezones":["UTC+04"],"tld":[".ae"],"callingCodes":["971"],"borders":["OMN","SAU"],"capitalLatLng":[24.474796,54.370576],"latlng":[24,54],"demonym":"Emirati","nativeName":"دولة الإمارات العربية المتحدة","altSpellings":["AE","UAE"]},"GBR":{"a3":"GBR","a2":"GB","name":"Wales","capital":null,"population":0,"area":0,"region":null,"subregion":null,"languages":[],"currencies":[],"timezones":[],"tld":[],"callingCodes":[],"borders":[],"capitalLatLng":null,"latlng":null,"demonym":null,"nativeName":null,"altSpellings":[]},"USA":{"a3":"USA","a2":"US","name":"United States","capital":"Washington D.C.","population":319259000,"area":9629091,"region":"Americas","subregion":"Northern America","languages":["en"],"currencies":["USD","USN","USS"],"timezones":["UTC−12:00","UTC−11:00","UTC−10:00","UTC−09:00","UTC−08:00","UTC−07:00","UTC−06:00","UTC−05:00","UTC−04:00","UTC+10:00","UTC+12:00"],"tld":[".us"],"callingCodes":["1"],"borders":["CAN","MEX"],"capitalLatLng":[38.894986,-77.036571],"latlng":[38,-97],"demonym":"American","nativeName":"United States","altSpellings":["US","USA","United States of America"]},"URY":{"a3":"URY","a2":"UY","name":"Uruguay","capital":"Montevideo","population":3404189,"area":181034,"region":"Americas","subregion":"South America","languages":["es"],"currencies":["UYI","UYU"],"timezones":["UTC−03:00"],"tld":[".uy"],"callingCodes":["598"],"borders":["ARG","BRA"],"capitalLatLng":[-34.905904,-56.191357],"latlng":[-33,-56],"demonym":"Uruguayan","nativeName":"Uruguay","altSpellings":["UY","Oriental Republic of Uruguay","República Oriental del Uruguay"]},"UZB":{"a3":"UZB","a2":"UZ","name":"Uzbekistan","capital":"Tashkent","population":30492800,"area":447400,"region":"Asia","subregion":"Central Asia","languages":["uz","ru"],"currencies":["UZS"],"timezones":["UTC+05:00"],"tld":[".uz"],"callingCodes":["998"],"borders":["AFG","KAZ","KGZ","TJK","TKM"],"capitalLatLng":[41.312336,69.278708],"latlng":[41,64],"demonym":"Uzbekistani","nativeName":"O‘zbekiston","altSpellings":["UZ","Republic of Uzbekistan","O‘zbekiston Respublikasi","Ўзбекистон Республикаси"]},"VUT":{"a3":"VUT","a2":"VU","name":"Vanuatu","capital":"Port Vila","population":264652,"area":12189,"region":"Oceania","subregion":"Melanesia","languages":["bi","en","fr"],"currencies":["VUV"],"timezones":["UTC+11:00"],"tld":[".vu"],"callingCodes":["678"],"borders":[],"capitalLatLng":[-17.741497,168.315016],"latlng":[-16,167],"demonym":"Ni-Vanuatu","nativeName":"Vanuatu","altSpellings":["VU","Republic of Vanuatu","Ripablik blong Vanuatu","République de Vanuatu"]},"VEN":{"a3":"VEN","a2":"VE","name":"Venezuela","capital":"Caracas","population":30206307,"area":916445,"region":"Americas","subregion":"South America","languages":["es"],"currencies":["VEF"],"timezones":["UTC−04:30"],"tld":[".ve"],"callingCodes":["58"],"borders":["BRA","COL","GUY"],"capitalLatLng":[10.506098,-66.914602],"latlng":[8,-66],"demonym":"Venezuelan","nativeName":"Venezuela","altSpellings":["VE","Bolivarian Republic of Venezuela","República Bolivariana de Venezuela"]},"VNM":{"a3":"VNM","a2":"VN","name":"Vietnam","capital":"Hanoi","population":89708900,"area":331212,"region":"Asia","subregion":"South-Eastern Asia","languages":["vi"],"currencies":["VND"],"timezones":["UTC+07:00"],"tld":[".vn"],"callingCodes":["84"],"borders":["KHM","CHN","LAO"],"capitalLatLng":[21.02945,105.854444],"latlng":[16.16666666,107.83333333],"demonym":"Vietnamese","nativeName":"Việt Nam","altSpellings":["VN","Socialist Republic of Vietnam","Cộng hòa Xã hội chủ nghĩa Việt Nam"]},"WLF":{"a3":"WLF","a2":"WF","name":"Wallis and Futuna","capital":"Mata-Utu","population":13135,"area":142,"region":"Oceania","subregion":"Polynesia","languages":["fr"],"currencies":["XPF"],"timezones":[],"tld":[".wf"],"callingCodes":["681"],"borders":[],"capitalLatLng":[-13.282042,-176.174022],"latlng":[-13.3,-176.2],"demonym":"Wallis and Futuna Islander","nativeName":"Wallis et Futuna","altSpellings":["WF","Territory of the Wallis and Futuna Islands","Territoire des îles Wallis et Futuna"]},"ESH":{"a3":"ESH","a2":"EH","name":"Western Sahara","capital":"El Aaiún","population":586000,"area":266000,"region":"Africa","subregion":"Northern Africa","languages":["es"],"currencies":["MAD","DZD","MRO"],"timezones":[],"tld":[".eh"],"callingCodes":["212"],"borders":["DZA","MRT","MAR"],"capitalLatLng":[27.154512,-13.195392],"latlng":[24.5,-13],"demonym":"Sahrawi","nativeName":"الصحراء الغربية","altSpellings":["EH","Taneẓroft Tutrimt"]},"YEM":{"a3":"YEM","a2":"YE","name":"Yemen","capital":"Sana'a","population":25956000,"area":527968,"region":"Asia","subregion":"Western Asia","languages":["ar"],"currencies":["YER"],"timezones":["UTC+03:00"],"tld":[".ye"],"callingCodes":["967"],"borders":["OMN","SAU"],"capitalLatLng":[15.353857,44.205884],"latlng":[15,48],"demonym":"Yemeni","nativeName":"اليَمَن","altSpellings":["YE","Yemeni Republic","al-Jumhūriyyah al-Yamaniyyah"]},"ZMB":{"a3":"ZMB","a2":"ZM","name":"Zambia","capital":"Lusaka","population":15023315,"area":752612,"region":"Africa","subregion":"Eastern Africa","languages":["en"],"currencies":["ZMK"],"timezones":["UTC+02:00"],"tld":[".zm"],"callingCodes":["260"],"borders":["AGO","BWA","COD","MWI","MOZ","NAM","TZA","ZWE"],"capitalLatLng":[-15.416449,28.282154],"latlng":[-15,30],"demonym":"Zambian","nativeName":"Zambia","altSpellings":["ZM","Republic of Zambia"]},"ZWE":{"a3":"ZWE","a2":"ZW","name":"Zimbabwe","capital":"Harare","population":13061239,"area":390757,"region":"Africa","subregion":"Eastern Africa","languages":["en","sn","nd"],"currencies":["USD"],"timezones":["UTC+02:00"],"tld":[".zw"],"callingCodes":["263"],"borders":["BWA","MOZ","ZAF","ZMB"],"capitalLatLng":[-17.831773,31.045686],"latlng":[-20,30],"demonym":"Zimbabwean","nativeName":"Zimbabwe","altSpellings":["ZW","Republic of Zimbabwe"]}};
+const BUILT_IN_COUNTRY_INDEX = {"afghanistan":"AFG","af":"AFG","afg":"AFG","afnistn":"AFG","albania":"ALB","al":"ALB","alb":"ALB","shqipri":"ALB","shqipria":"ALB","shqipnia":"ALB","algeria":"DZA","dz":"DZA","dza":"DZA","dzayer":"DZA","algrie":"DZA","americansamoa":"ASM","as":"ASM","asm":"ASM","amerikasmoa":"ASM","amelikasmoa":"ASM","smoaamelika":"ASM","angola":"AGO","ao":"AGO","ago":"AGO","repblicadeangola":"AGO","publikadeanla":"AGO","anguilla":"AIA","ai":"AIA","aia":"AIA","antiguaandbarbuda":"ATG","ag":"ATG","atg":"ATG","argentina":"ARG","ar":"ARG","arg":"ARG","argentinerepublic":"ARG","repblicaargentina":"ARG","armenia":"ARM","am":"ARM","arm":"ARM","hayastan":"ARM","republicofarmenia":"ARM","":"UZB","aruba":"ABW","aw":"ABW","abw":"ABW","australia":"AUS","au":"AUS","aus":"AUS","austria":"AUT","at":"AUT","aut":"AUT","sterreich":"AUT","osterreich":"AUT","oesterreich":"AUT","azerbaijan":"AZE","az":"AZE","aze":"AZE","republicofazerbaijan":"AZE","azrbaycanrespublikas":"AZE","thebahamas":"BHS","bs":"BHS","bhs":"BHS","commonwealthofthebahamas":"BHS","bahrain":"BHR","bh":"BHR","bhr":"BHR","kingdomofbahrain":"BHR","mamlakatalbarayn":"BHR","bangladesh":"BGD","bd":"BGD","bgd":"BGD","peoplesrepublicofbangladesh":"BGD","gnprjatntribangladesh":"BGD","barbados":"BRB","bb":"BRB","brb":"BRB","belarus":"BLR","by":"BLR","blr":"BLR","bielaru":"BLR","republicofbelarus":"BLR","belorussiya":"BLR","respublikabelarus":"BLR","belgium":"BEL","be":"BEL","bel":"BEL","belgi":"BEL","belgie":"BEL","belgien":"BEL","belgique":"BEL","kingdomofbelgium":"BEL","koninkrijkbelgi":"BEL","royaumedebelgique":"BEL","knigreichbelgien":"BEL","belize":"BLZ","bz":"BLZ","blz":"BLZ","benin":"BEN","bj":"BEN","ben":"BEN","republicofbenin":"BEN","rpubliquedubnin":"BEN","bermuda":"BMU","bm":"BMU","bmu":"BMU","theislandsofbermuda":"BMU","thebermudas":"BMU","somersisles":"BMU","bhutan":"BTN","bt":"BTN","btn":"BTN","kingdomofbhutan":"BTN","bolivia":"BOL","bo":"BOL","bol":"BOL","buliwya":"BOL","wuliwya":"BOL","plurinationalstateofbolivia":"BOL","estadoplurinacionaldebolivia":"BOL","buliwyamamallaqta":"BOL","wuliwyasuyu":"BOL","tetvolvia":"BOL","bosniaandherzegovina":"BIH","ba":"BIH","bih":"BIH","bosniaherzegovina":"BIH","botswana":"BWA","bw":"BWA","bwa":"BWA","republicofbotswana":"BWA","lefatshelabotswana":"BWA","brazil":"BRA","br":"BRA","bra":"BRA","brasil":"BRA","federativerepublicofbrazil":"BRA","repblicafederativadobrasil":"BRA","britishindianoceanterritory":"IOT","io":"IOT","iot":"IOT","brunei":"BRN","bn":"BRN","brn":"BRN","nationofbrunei":"BRN","theabodeofpeace":"BRN","bulgaria":"BGR","bg":"BGR","bgr":"BGR","republicofbulgaria":"BGR","burkinafaso":"BFA","bf":"BFA","bfa":"BFA","burundi":"BDI","bi":"BDI","bdi":"BDI","republicofburundi":"BDI","republikayuburundi":"BDI","rpubliqueduburundi":"BDI","cambodia":"KHM","kh":"KHM","khm":"KHM","kingdomofcambodia":"KHM","cameroon":"CMR","cm":"CMR","cmr":"CMR","republicofcameroon":"CMR","rpubliqueducameroun":"CMR","canada":"CAN","ca":"CAN","can":"CAN","capeverde":"CPV","cv":"CPV","cpv":"CPV","republicofcaboverde":"CPV","repblicadecaboverde":"CPV","caymanislands":"CYM","ky":"CYM","cym":"CYM","centralafricanrepublic":"CAF","cf":"CAF","caf":"CAF","rpubliquecentrafricaine":"CAF","chad":"TCD","td":"TCD","tcd":"TCD","tchad":"TCD","republicofchad":"TCD","rpubliquedutchad":"TCD","chile":"CHL","cl":"CHL","chl":"CHL","republicofchile":"CHL","repblicadechile":"CHL","china":"CHN","cn":"CHN","chn":"CHN","zhnggu":"CHN","zhongguo":"CHN","zhonghua":"CHN","peoplesrepublicofchina":"CHN","zhnghurnmngnghgu":"CHN","christmasisland":"CXR","cx":"CXR","cxr":"CXR","territoryofchristmasisland":"CXR","cocoskeelingislands":"CCK","cc":"CCK","cck":"CCK","territoryofthecocoskeelingislands":"CCK","keelingislands":"CCK","colombia":"COL","co":"COL","col":"COL","republicofcolombia":"COL","repblicadecolombia":"COL","comoros":"COM","km":"COM","com":"COM","unionofthecomoros":"COM","uniondescomores":"COM","udzimawakomori":"COM","alittidalqumur":"COM","republicofthecongo":"COG","cg":"COG","cog":"COG","congobrazzaville":"COG","democraticrepublicofthecongo":"COD","cd":"COD","cod":"COD","drcongo":"COD","congokinshasa":"COD","drc":"COD","cookislands":"COK","ck":"COK","cok":"COK","kkiirani":"COK","costarica":"CRI","cr":"CRI","cri":"CRI","republicofcostarica":"CRI","repblicadecostarica":"CRI","ivorycoast":"CIV","ci":"CIV","civ":"CIV","republicofctedivoire":"CIV","rpubliquedectedivoire":"CIV","croatia":"HRV","hr":"HRV","hrv":"HRV","hrvatska":"HRV","republicofcroatia":"HRV","republikahrvatska":"HRV","cuba":"CUB","cu":"CUB","cub":"CUB","republicofcuba":"CUB","repblicadecuba":"CUB","cyprus":"CYP","cy":"CYP","cyp":"CYP","kpros":"CYP","kbrs":"CYP","republicofcyprus":"CYP","kbrscumhuriyeti":"CYP","czechrepublic":"CZE","cz":"CZE","cze":"CZE","eskrepublika":"CZE","esko":"CZE","denmark":"DNK","dk":"DNK","dnk":"DNK","danmark":"DNK","kingdomofdenmark":"DNK","kongerigetdanmark":"DNK","djibouti":"DJI","dj":"DJI","dji":"DJI","jabuuti":"DJI","gabuuti":"DJI","republicofdjibouti":"DJI","rpubliquededjibouti":"DJI","gabuutihummuuno":"DJI","jamhuuriyaddajabuuti":"DJI","dominica":"DMA","dm":"DMA","dma":"DMA","dominique":"DMA","waitukubuli":"DMA","commonwealthofdominica":"DMA","dominicanrepublic":"DOM","do":"DOM","dom":"DOM","ecuador":"ECU","ec":"ECU","ecu":"ECU","republicofecuador":"ECU","repblicadelecuador":"ECU","egypt":"EGY","eg":"EGY","egy":"EGY","arabrepublicofegypt":"EGY","elsalvador":"SLV","sv":"SLV","slv":"SLV","republicofelsalvador":"SLV","repblicadeelsalvador":"SLV","equatorialguinea":"GNQ","gq":"GNQ","gnq":"GNQ","republicofequatorialguinea":"GNQ","repblicadeguineaecuatorial":"GNQ","rpubliquedeguinequatoriale":"GNQ","repblicadaguinequatorial":"GNQ","eritrea":"ERI","er":"ERI","eri":"ERI","stateoferitrea":"ERI","dawlatiritriy":"ERI","ertr":"ERI","iritriy":"ERI","estonia":"EST","ee":"EST","est":"EST","eesti":"EST","republicofestonia":"EST","eestivabariik":"EST","ethiopia":"ETH","et":"ETH","eth":"ETH","tyy":"ETH","federaldemocraticrepublicofethiopia":"ETH","falklandislands":"FLK","fk":"FLK","flk":"FLK","islasmalvinas":"FLK","faroeislands":"FRO","fo":"FRO","fro":"FRO","froyar":"FRO","frerne":"FRO","fiji":"FJI","fj":"FJI","fji":"FJI","viti":"FJI","republicoffiji":"FJI","matanitukoviti":"FJI","fijgaarjya":"FJI","finland":"FIN","fi":"FIN","fin":"FIN","suomi":"FIN","republicoffinland":"FIN","suomentasavalta":"FIN","republikenfinland":"FIN","france":"FRA","fr":"FRA","fra":"FRA","frenchrepublic":"FRA","rpubliquefranaise":"FRA","frenchguiana":"GUF","gf":"GUF","guf":"GUF","guiana":"GUF","guyane":"GUF","frenchpolynesia":"PYF","pf":"PYF","pyf":"PYF","polynsiefranaise":"PYF","prnetiafarni":"PYF","frenchsouthernandantarcticlands":"ATF","tf":"ATF","atf":"ATF","gabon":"GAB","ga":"GAB","gab":"GAB","gaboneserepublic":"GAB","rpubliquegabonaise":"GAB","thegambia":"GMB","gm":"GMB","gmb":"GMB","republicofthegambia":"GMB","georgia":"GEO","ge":"GEO","geo":"GEO","sakartvelo":"GEO","germany":"DEU","de":"DEU","deu":"DEU","federalrepublicofgermany":"DEU","bundesrepublikdeutschland":"DEU","ghana":"GHA","gh":"GHA","gha":"GHA","gibraltar":"GIB","gi":"GIB","gib":"GIB","greece":"GRC","gr":"GRC","grc":"GRC","ellda":"GRC","hellenicrepublic":"GRC","greenland":"GRL","gl":"GRL","grl":"GRL","grnland":"GRL","grenada":"GRD","gd":"GRD","grd":"GRD","guadeloupe":"GLP","gp":"GLP","glp":"GLP","gwadloup":"GLP","guam":"GUM","gu":"GUM","gum":"GUM","guhn":"GUM","guatemala":"GTM","gt":"GTM","gtm":"GTM","guernsey":"GGY","gg":"GGY","ggy":"GGY","bailiwickofguernsey":"GGY","bailliagedeguernesey":"GGY","guinea":"GIN","gn":"GIN","gin":"GIN","republicofguinea":"GIN","rpubliquedeguine":"GIN","guineabissau":"GNB","gw":"GNB","gnb":"GNB","republicofguineabissau":"GNB","repblicadaguinbissau":"GNB","guyana":"GUY","gy":"GUY","guy":"GUY","cooperativerepublicofguyana":"GUY","haiti":"HTI","ht":"HTI","hti":"HTI","republicofhaiti":"HTI","rpubliquedhati":"HTI","repiblikayiti":"HTI","heardislandandmcdonaldislands":"HMD","hm":"HMD","hmd":"HMD","honduras":"HND","hn":"HND","hnd":"HND","republicofhonduras":"HND","repblicadehonduras":"HND","hongkong":"HKG","hk":"HKG","hkg":"HKG","hungary":"HUN","hu":"HUN","hun":"HUN","iceland":"ISL","is":"ISL","isl":"ISL","island":"ISL","republicoficeland":"ISL","lveldisland":"ISL","india":"IND","in":"IND","ind":"IND","bhrat":"IND","republicofindia":"IND","bharatganrajya":"IND","indonesia":"IDN","id":"IDN","idn":"IDN","republicofindonesia":"IDN","republikindonesia":"IDN","iran":"IRN","ir":"IRN","irn":"IRN","islamicrepublicofiran":"IRN","jomhuriyeeslmiyeirn":"IRN","iraq":"IRQ","iq":"IRQ","irq":"IRQ","republicofiraq":"IRQ","jumhriyyatalirq":"IRQ","ireland":"IRL","ie":"IRL","irl":"IRL","ire":"IRL","republicofireland":"IRL","poblachtnahireann":"IRL","israel":"ISR","il":"ISR","isr":"ISR","stateofisrael":"ISR","mednatyisrel":"ISR","italy":"ITA","it":"ITA","ita":"ITA","italianrepublic":"ITA","repubblicaitaliana":"ITA","jamaica":"JAM","jm":"JAM","jam":"JAM","japan":"JPN","jp":"JPN","jpn":"JPN","nippon":"JPN","nihon":"JPN","jersey":"JEY","je":"JEY","jey":"JEY","bailiwickofjersey":"JEY","bailliagedejersey":"JEY","bailliagedjrri":"JEY","jordan":"JOR","jo":"JOR","jor":"JOR","hashemitekingdomofjordan":"JOR","almamlakahalurdunyahalhshimyah":"JOR","kazakhstan":"KAZ","kz":"KAZ","kaz":"KAZ","qazaqstan":"KAZ","republicofkazakhstan":"KAZ","qazaqstanrespublkas":"KAZ","respublikakazakhstan":"KAZ","kenya":"KEN","ke":"KEN","ken":"KEN","republicofkenya":"KEN","jamhuriyakenya":"KEN","kiribati":"KIR","ki":"KIR","kir":"KIR","republicofkiribati":"KIR","ribaberikikiribati":"KIR","northkorea":"PRK","kp":"PRK","prk":"PRK","democraticpeoplesrepublicofkorea":"PRK","chosnminjujuiinminkonghwaguk":"PRK","southkorea":"KOR","kr":"KOR","kor":"KOR","republicofkorea":"KOR","kuwait":"KWT","kw":"KWT","kwt":"KWT","stateofkuwait":"KWT","dawlatalkuwait":"KWT","kyrgyzstan":"KGZ","kg":"KGZ","kgz":"KGZ","kyrgyzrepublic":"KGZ","kyrgyzrespublikasy":"KGZ","laos":"LAO","la":"LAO","lao":"LAO","laopeoplesdemocraticrepublic":"LAO","sathalanalatpaxathipataipaxaxonlao":"LAO","latvia":"LVA","lv":"LVA","lva":"LVA","republicoflatvia":"LVA","latvijasrepublika":"LVA","lebanon":"LBN","lb":"LBN","lbn":"LBN","lebaneserepublic":"LBN","aljumhryahallibnnyah":"LBN","lesotho":"LSO","ls":"LSO","lso":"LSO","kingdomoflesotho":"LSO","musooalesotho":"LSO","liberia":"LBR","lr":"LBR","lbr":"LBR","republicofliberia":"LBR","libya":"LBY","ly":"LBY","lby":"LBY","stateoflibya":"LBY","dawlatlibya":"LBY","liechtenstein":"LIE","li":"LIE","lie":"LIE","principalityofliechtenstein":"LIE","frstentumliechtenstein":"LIE","lithuania":"LTU","lt":"LTU","ltu":"LTU","republicoflithuania":"LTU","lietuvosrespublika":"LTU","luxembourg":"LUX","lu":"LUX","lux":"LUX","grandduchyofluxembourg":"LUX","grandduchdeluxembourg":"LUX","groherzogtumluxemburg":"LUX","groussherzogtumltzebuerg":"LUX","macau":"MAC","mo":"MAC","mac":"MAC","macaospecialadministrativeregionofthepeoplesrepublicofchina":"MAC","regioadministrativaespecialdemacaudarepblicapopulardachina":"MAC","republicofmacedonia":"MKD","mk":"MKD","mkd":"MKD","madagascar":"MDG","mg":"MDG","mdg":"MDG","republicofmadagascar":"MDG","repoblikanimadagasikara":"MDG","rpubliquedemadagascar":"MDG","malawi":"MWI","mw":"MWI","mwi":"MWI","republicofmalawi":"MWI","malaysia":"MYS","my":"MYS","mys":"MYS","maldives":"MDV","mv":"MDV","mdv":"MDV","maldiveislands":"MDV","republicofthemaldives":"MDV","dhivehiraajjeygejumhooriyya":"MDV","mali":"MLI","ml":"MLI","mli":"MLI","republicofmali":"MLI","rpubliquedumali":"MLI","malta":"MLT","mt":"MLT","mlt":"MLT","republicofmalta":"MLT","repubblikatamalta":"MLT","isleofman":"IMN","im":"IMN","imn":"IMN","ellanvannin":"IMN","mann":"IMN","mannin":"IMN","marshallislands":"MHL","mh":"MHL","mhl":"MHL","republicofthemarshallislands":"MHL","aolepnaorkinmaje":"MHL","martinique":"MTQ","mq":"MTQ","mtq":"MTQ","mauritania":"MRT","mr":"MRT","mrt":"MRT","islamicrepublicofmauritania":"MRT","aljumhriyyahalislmiyyahalmrtniyyah":"MRT","mauritius":"MUS","mu":"MUS","mus":"MUS","republicofmauritius":"MUS","rpubliquedemaurice":"MUS","mayotte":"MYT","yt":"MYT","myt":"MYT","departmentofmayotte":"MYT","dpartementdemayotte":"MYT","mexico":"MEX","mx":"MEX","mex":"MEX","mexicanos":"MEX","unitedmexicanstates":"MEX","estadosunidosmexicanos":"MEX","federatedstatesofmicronesia":"FSM","fm":"FSM","fsm":"FSM","moldova":"MDA","md":"MDA","mda":"MDA","republicofmoldova":"MDA","republicamoldova":"MDA","monaco":"MCO","mc":"MCO","mco":"MCO","principalityofmonaco":"MCO","principautdemonaco":"MCO","mongolia":"MNG","mn":"MNG","mng":"MNG","montserrat":"MSR","ms":"MSR","msr":"MSR","morocco":"MAR","ma":"MAR","mar":"MAR","kingdomofmorocco":"MAR","almamlakahalmaribiyah":"MAR","mozambique":"MOZ","mz":"MOZ","moz":"MOZ","republicofmozambique":"MOZ","repblicademoambique":"MOZ","namibia":"NAM","na":"NAM","nam":"NAM","namibi":"NAM","republicofnamibia":"NAM","nauru":"NRU","nr":"NRU","nru":"NRU","naoero":"NRU","pleasantisland":"NRU","republicofnauru":"NRU","ripubliknaoero":"NRU","nepal":"NPL","np":"NPL","npl":"NPL","federaldemocraticrepublicofnepal":"NPL","loktntrikganatantranepl":"NPL","netherlands":"NLD","nl":"NLD","nld":"NLD","holland":"NLD","nederland":"NLD","netherlandsantilles":"ANT","ant":"ANT","newcaledonia":"NCL","nc":"NCL","ncl":"NCL","newzealand":"NZL","nz":"NZL","nzl":"NZL","aotearoa":"NZL","nicaragua":"NIC","ni":"NIC","nic":"NIC","republicofnicaragua":"NIC","repblicadenicaragua":"NIC","niger":"NER","ne":"NER","ner":"NER","nijar":"NER","republicofniger":"NER","rpubliqueduniger":"NER","nigeria":"NGA","ng":"NGA","nga":"NGA","nijeriya":"NGA","najr":"NGA","federalrepublicofnigeria":"NGA","niue":"NIU","nu":"NIU","niu":"NIU","norfolkisland":"NFK","nf":"NFK","nfk":"NFK","territoryofnorfolkisland":"NFK","teratriofnorfkailen":"NFK","northernmarianaislands":"MNP","mp":"MNP","mnp":"MNP","commonwealthofthenorthernmarianaislands":"MNP","sankattansihanaislasmarinas":"MNP","norway":"NOR","no":"NOR","nor":"NOR","norge":"NOR","noreg":"NOR","kingdomofnorway":"NOR","kongeriketnorge":"NOR","kongeriketnoreg":"NOR","oman":"OMN","om":"OMN","omn":"OMN","sultanateofoman":"OMN","salanatumn":"OMN","pakistan":"PAK","pk":"PAK","pak":"PAK","pkistn":"PAK","islamicrepublicofpakistan":"PAK","islmjumhriyaehpkistn":"PAK","palau":"PLW","pw":"PLW","plw":"PLW","republicofpalau":"PLW","beluuerabelau":"PLW","panama":"PAN","pa":"PAN","pan":"PAN","republicofpanama":"PAN","repblicadepanam":"PAN","papuanewguinea":"PNG","pg":"PNG","png":"PNG","independentstateofpapuanewguinea":"PNG","independenstetbilongpapuaniugini":"PNG","paraguay":"PRY","py":"PRY","pry":"PRY","republicofparaguay":"PRY","repblicadelparaguay":"PRY","tetparagui":"PRY","peru":"PER","pe":"PER","per":"PER","republicofperu":"PER","repblicadelper":"PER","philippines":"PHL","ph":"PHL","phl":"PHL","republicofthephilippines":"PHL","repblikangpilipinas":"PHL","pitcairnislands":"PCN","pn":"PCN","pcn":"PCN","pitcairnhendersonducieandoenoislands":"PCN","poland":"POL","pl":"POL","pol":"POL","republicofpoland":"POL","rzeczpospolitapolska":"POL","portugal":"PRT","pt":"PRT","prt":"PRT","portuguesa":"PRT","portugueserepublic":"PRT","repblicaportuguesa":"PRT","puertorico":"PRI","pr":"PRI","pri":"PRI","commonwealthofpuertorico":"PRI","estadolibreasociadodepuertorico":"PRI","qatar":"QAT","qa":"QAT","qat":"QAT","stateofqatar":"QAT","dawlatqaar":"QAT","runion":"REU","re":"REU","reu":"REU","reunion":"REU","romania":"ROU","ro":"ROU","rou":"ROU","rumania":"ROU","roumania":"ROU","romnia":"ROU","russia":"RUS","ru":"RUS","rus":"RUS","rossiya":"RUS","russianfederation":"RUS","rossiyskayafederatsiya":"RUS","rwanda":"RWA","rw":"RWA","rwa":"RWA","republicofrwanda":"RWA","repubulikayurwanda":"RWA","rpubliquedurwanda":"RWA","sainthelena":"SHN","sh":"SHN","shn":"SHN","saintkittsandnevis":"KNA","kn":"KNA","kna":"KNA","federationofsaintchristopherandnevis":"KNA","saintlucia":"LCA","lc":"LCA","lca":"LCA","saintpierreandmiquelon":"SPM","pm":"SPM","spm":"SPM","collectivitterritorialedesaintpierreetmiquelon":"SPM","saintvincentandthegrenadines":"VCT","vc":"VCT","vct":"VCT","samoa":"WSM","ws":"WSM","wsm":"WSM","independentstateofsamoa":"WSM","malosaolototutoatasiosmoa":"WSM","sanmarino":"SMR","sm":"SMR","smr":"SMR","republicofsanmarino":"SMR","repubblicadisanmarino":"SMR","sotomandprncipe":"STP","st":"STP","stp":"STP","democraticrepublicofsotomandprncipe":"STP","repblicademocrticadesotomeprncipe":"STP","saudiarabia":"SAU","sa":"SAU","sau":"SAU","kingdomofsaudiarabia":"SAU","almamlakahalarabiyyahassudiyyah":"SAU","senegal":"SEN","sn":"SEN","sen":"SEN","republicofsenegal":"SEN","rpubliquedusngal":"SEN","serbia":"SRB","rs":"SRB","srb":"SRB","srbija":"SRB","republicofserbia":"SRB","republikasrbija":"SRB","seychelles":"SYC","sc":"SYC","syc":"SYC","republicofseychelles":"SYC","repibliksesel":"SYC","rpubliquedesseychelles":"SYC","sierraleone":"SLE","sl":"SLE","sle":"SLE","republicofsierraleone":"SLE","singapore":"SGP","sg":"SGP","sgp":"SGP","singapura":"SGP","republiksingapura":"SGP","slovakia":"SVK","sk":"SVK","svk":"SVK","slovakrepublic":"SVK","slovenskrepublika":"SVK","slovenia":"SVN","si":"SVN","svn":"SVN","republicofslovenia":"SVN","republikaslovenija":"SVN","solomonislands":"SLB","sb":"SLB","slb":"SLB","somalia":"SOM","so":"SOM","som":"SOM","aml":"SOM","federalrepublicofsomalia":"SOM","jamhuuriyaddafederaalkasoomaaliya":"SOM","jumhriyyatamlalfiderliyya":"SOM","southafrica":"ZAF","za":"ZAF","zaf":"ZAF","rsa":"ZAF","suidafrika":"ZAF","republicofsouthafrica":"ZAF","southgeorgia":"SGS","gs":"SGS","sgs":"SGS","southgeorgiaandthesouthsandwichislands":"SGS","southsudan":"SSD","ss":"SSD","ssd":"SSD","spain":"ESP","es":"ESP","esp":"ESP","kingdomofspain":"ESP","reinodeespaa":"ESP","srilanka":"LKA","lk":"LKA","lka":"LKA","ilakai":"LKA","democraticsocialistrepublicofsrilanka":"LKA","sudan":"SDN","sd":"SDN","sdn":"SDN","republicofthesudan":"SDN","jumhryatassdn":"SDN","suriname":"SUR","sr":"SUR","sur":"SUR","sarnam":"SUR","sranangron":"SUR","republicofsuriname":"SUR","republieksuriname":"SUR","svalbardandjanmayen":"SJM","sj":"SJM","sjm":"SJM","svalbardandjanmayenislands":"SJM","swaziland":"SWZ","sz":"SWZ","swz":"SWZ","weswatini":"SWZ","swatini":"SWZ","ngwane":"SWZ","kingdomofswaziland":"SWZ","umbusowaseswatini":"SWZ","sweden":"SWE","se":"SWE","swe":"SWE","kingdomofsweden":"SWE","konungariketsverige":"SWE","switzerland":"CHE","ch":"CHE","che":"CHE","swissconfederation":"CHE","schweiz":"CHE","suisse":"CHE","svizzera":"CHE","svizra":"CHE","syria":"SYR","sy":"SYR","syr":"SYR","syrianarabrepublic":"SYR","aljumhryahalarabyahassryah":"SYR","taiwan":"TWN","tw":"TWN","twn":"TWN","tiwn":"TWN","republicofchina":"TWN","zhnghumngu":"TWN","tajikistan":"TJK","tj":"TJK","tjk":"TJK","toikiston":"TJK","republicoftajikistan":"TJK","umhuriyitoikiston":"TJK","tanzania":"TZA","tz":"TZA","tza":"TZA","unitedrepublicoftanzania":"TZA","jamhuriyamuunganowatanzania":"TZA","thailand":"THA","th":"THA","tha":"THA","prathet":"THA","thai":"THA","kingdomofthailand":"THA","ratchaanachakthai":"THA","easttimor":"TLS","tl":"TLS","tls":"TLS","democraticrepublicoftimorleste":"TLS","repblicademocrticadetimorleste":"TLS","repblikademokrtikatimrleste":"TLS","togo":"TGO","tg":"TGO","tgo":"TGO","togolese":"TGO","togoleserepublic":"TGO","rpubliquetogolaise":"TGO","tokelau":"TKL","tk":"TKL","tkl":"TKL","tonga":"TON","to":"TON","ton":"TON","trinidadandtobago":"TTO","tt":"TTO","tto":"TTO","republicoftrinidadandtobago":"TTO","tunisia":"TUN","tn":"TUN","tun":"TUN","republicoftunisia":"TUN","aljumhriyyahattnisiyyah":"TUN","turkey":"TUR","tr":"TUR","tur":"TUR","turkiye":"TUR","republicofturkey":"TUR","trkiyecumhuriyeti":"TUR","turkmenistan":"TKM","tm":"TKM","tkm":"TKM","tuvalu":"TUV","tv":"TUV","tuv":"TUV","uganda":"UGA","ug":"UGA","uga":"UGA","republicofuganda":"UGA","jamhuriyauganda":"UGA","ukraine":"UKR","ua":"UKR","ukr":"UKR","ukrayina":"UKR","unitedarabemirates":"ARE","ae":"ARE","are":"ARE","uae":"ARE","wales":"GBR","gb":"GBR","gbr":"GBR","unitedstates":"USA","us":"USA","usa":"USA","unitedstatesofamerica":"USA","uruguay":"URY","uy":"URY","ury":"URY","orientalrepublicofuruguay":"URY","repblicaorientaldeluruguay":"URY","uzbekistan":"UZB","uz":"UZB","uzb":"UZB","republicofuzbekistan":"UZB","ozbekistonrespublikasi":"UZB","vanuatu":"VUT","vu":"VUT","vut":"VUT","republicofvanuatu":"VUT","ripablikblongvanuatu":"VUT","rpubliquedevanuatu":"VUT","venezuela":"VEN","ve":"VEN","ven":"VEN","bolivarianrepublicofvenezuela":"VEN","repblicabolivarianadevenezuela":"VEN","vietnam":"VNM","vn":"VNM","vnm":"VNM","socialistrepublicofvietnam":"VNM","cnghaxhichnghavitnam":"VNM","wallisandfutuna":"WLF","wf":"WLF","wlf":"WLF","territoryofthewallisandfutunaislands":"WLF","territoiredesleswallisetfutuna":"WLF","westernsahara":"ESH","eh":"ESH","esh":"ESH","tanerofttutrimt":"ESH","yemen":"YEM","ye":"YEM","yem":"YEM","yemenirepublic":"YEM","aljumhriyyahalyamaniyyah":"YEM","zambia":"ZMB","zm":"ZMB","zmb":"ZMB","republicofzambia":"ZMB","zimbabwe":"ZWE","zw":"ZWE","zwe":"ZWE","republicofzimbabwe":"ZWE"};
+
+/* =========================================================
+   CONFIGURATION
+========================================================= */
+const CFG = {
+  size: 600, center: 300,
+  baseScale: 255, minScale: 180, maxScale: 460, focusScale: 370,
+  introDuration: 3900, enterDuration: 1350, focusDuration: 1300,
+  defaultRotate: [10, -18, 0],
+  isMobile: window.innerWidth < 760
+};
+const $ = (id) => document.getElementById(id);
+
+/* =========================================================
+   STATE
+========================================================= */
+let appState = 'loading';   // loading | intro | start | entering | explore
+let countries = [];         // {id,name,feature,centroid:[lon,lat],info}
+let projection, geoPath, borderMesh, graticule;
+let currentScale = CFG.baseScale;
+let rotation = CFG.defaultRotate.slice();
+let isDragging = false, isFocusing = false, autoRotate = true;
+let dragVelocity = 0;
+let selectedCountry = null, hoveredCountry = null;
+let activeTweens = [];
+let lastFrame = performance.now();
+let idleResumeTimer = null;
+let topoOK = true, restOK = true;
+
+/* =========================================================
+   TWEEN SYSTEM (used for camera-style transitions)
+========================================================= */
+function easeInOutCubic(t){ return t < 0.5 ? 4*t*t*t : 1 - Math.pow(-2*t+2,3)/2; }
+function addTween({ duration, easing = easeInOutCubic, onUpdate, onComplete }){
+  activeTweens.push({ start: performance.now(), duration, easing, onUpdate, onComplete, done:false });
+}
+function stepTweens(){
+  const now = performance.now();
+  for (const tw of activeTweens){
+    if (tw.done) continue;
+    const t = Math.min(1, (now - tw.start) / tw.duration);
+    tw.onUpdate(tw.easing(t));
+    if (t >= 1){ tw.done = true; tw.onComplete && tw.onComplete(); }
+  }
+  activeTweens = activeTweens.filter(t => !t.done);
+}
+
+/* =========================================================
+   STARFIELD (canvas 2D background)
+========================================================= */
+function initStarfield(){
+  const canvas = $('bg-canvas');
+  const ctx = canvas.getContext('2d');
+  let w, h, stars = [];
+
+  function resize(){
+    w = canvas.width = window.innerWidth * Math.min(devicePixelRatio, 2);
+    h = canvas.height = window.innerHeight * Math.min(devicePixelRatio, 2);
+    canvas.style.width = window.innerWidth + 'px';
+    canvas.style.height = window.innerHeight + 'px';
+    const count = CFG.isMobile ? 420 : 900;
+    stars = Array.from({length:count}, () => ({
+      x: Math.random()*w, y: Math.random()*h,
+      r: Math.random()*1.4 + 0.2,
+      baseA: Math.random()*0.6 + 0.2,
+      tw: Math.random()*Math.PI*2,
+      speed: Math.random()*0.15 + 0.03
+    }));
+  }
+  resize();
+  window.addEventListener('resize', resize);
+
+  function draw(){
+    ctx.fillStyle = '#020409';
+    ctx.fillRect(0,0,w,h);
+    for (const s of stars){
+      s.tw += s.speed * 0.05;
+      const a = s.baseA + Math.sin(s.tw) * 0.25;
+      ctx.beginPath();
+      ctx.fillStyle = `rgba(210,232,255,${Math.max(0,a)})`;
+      ctx.arc(s.x, s.y, s.r, 0, Math.PI*2);
+      ctx.fill();
+    }
+    requestAnimationFrame(draw);
+  }
+  draw();
+}
+
+/* =========================================================
+   DATA LOADING
+========================================================= */
+async function loadData(){
+  setLoadStatus('FETCHING WORLD TOPOLOGY...', 14);
+  let topology = null, restList = [];
+
+  try {
+    const res = await fetch('https://unpkg.com/world-atlas@2.0.2/countries-110m.json');
+    topology = await res.json();
+  } catch(e){ topoOK = false; }
+
+  setLoadStatus('LOADING BUILT-IN COUNTRY DATA...', 30);
+  try {
+    const res = await fetch('https://restcountries.com/v3.1/all?fields=name,capital,population,area,region,subregion,continents,flags,coatOfArms,ccn3,cca2,cca3,capitalInfo,languages,currencies,timezones,idd,tld,car,startOfWeek,borders,unMember,independent,maps,latlng');
+    restList = await res.json();
+    if (!Array.isArray(restList)) restList = [];
+  } catch(e){ restOK = false; }
+
+  if (!topoOK || !topology){
+    showErrorBanner('World geometry could not be loaded — the globe is unavailable right now. Try reloading.');
+    setLoadStatus('READY', 100);
+    return;
+  }
+
+  setLoadStatus('MAPPING COUNTRY PROFILES...', 58);
+  buildCountryList(topology, restList);
+
+  setLoadStatus('RENDERING GLOBE...', 78);
+  buildGlobe(topology);
+
+  setLoadStatus('READY', 100);
+}
+
+function setLoadStatus(text, pct){
+  $('load-status').textContent = text;
+  $('load-bar-fill').style.width = pct + '%';
+  $('load-pct').textContent = pct + '%';
+}
+function showErrorBanner(msg){
+  const b = $('error-banner');
+  b.textContent = msg;
+  b.classList.add('show');
+  setTimeout(() => b.classList.remove('show'), 6500);
+}
+
+
+function normalizeCountryName(name){
+  return String(name || '').toLowerCase().replace(/[^a-z0-9]+/g, '');
+}
+
+function getBuiltInCountryByName(name){
+  if (!name) return null;
+  const code = BUILT_IN_COUNTRY_INDEX[normalizeCountryName(name)];
+  return code ? BUILT_IN_COUNTRY_DB[code] : null;
+}
+
+function continentFromSubregion(region, subregion){
+  const s = String(subregion || '').toLowerCase();
+  const r = String(region || '').toLowerCase();
+
+  if (r === 'africa') return 'Africa';
+  if (r === 'europe') return 'Europe';
+  if (r === 'asia') return 'Asia';
+  if (r === 'oceania') return 'Oceania';
+  if (s.includes('north america') || s.includes('caribbean') || s.includes('central america')) return 'North America';
+  if (s.includes('south america')) return 'South America';
+
+  return r ? r : '—';
+}
+
+function staticToProfile(s){
+  if (!s) return null;
+
+  return {
+    capital: s.capital || '—',
+    population: Number(s.population) || 0,
+    area: Number(s.area) || 0,
+    region: s.region || '—',
+    subregion: s.subregion || '—',
+    continent: continentFromSubregion(s.region, s.subregion),
+    cca2: s.a2 || null,
+    cca3: s.a3 || null,
+    flag: s.a2 ? `https://flagcdn.com/w640/${String(s.a2).toLowerCase()}.png` : null,
+    flagAlt: s.a2 ? `${s.name} flag` : '',
+    languages: s.languages?.join(', ') || '—',
+    currency: s.currencies?.join(', ') || '—',
+    timezones: s.timezones?.join(', ') || '—',
+    tld: s.tld?.join(', ') || '—',
+    driving: '—',
+    startOfWeek: 'monday',
+    capitalLatLng: Array.isArray(s.capitalLatLng) && s.capitalLatLng.length === 2 ? s.capitalLatLng : null,
+    borders: Array.isArray(s.borders) ? s.borders.length : 0,
+    unMember: false,
+    independent: true,
+    latlng: Array.isArray(s.latlng) ? s.latlng : null,
+    idd: s.callingCodes?.length ? `+${s.callingCodes[0]}` : '—',
+    map: '#',
+    builtIn: true,
+    builtInSourceName: s.name
+  };
+}
+
+
+function buildCountryList(topology, restList){
+  const objectKey = Object.keys(topology.objects)[0];
+  const geo = topojson.feature(topology, topology.objects[objectKey]);
+
+  const restByCcn3 = new Map();
+  restList.forEach(c => {
+    if (c.ccn3) restByCcn3.set(String(c.ccn3).padStart(3, '0'), c);
+  });
+
+  geo.features.forEach(feature => {
+    const rawId = feature.id;
+    if (rawId === undefined || rawId === null || String(rawId) === '-99') return;
+
+    const ccn3 = String(rawId).padStart(3, '0');
+    const featureName = feature.properties?.name || '';
+    const rc = restByCcn3.get(ccn3);
+    const builtin = getBuiltInCountryByName(featureName) || (rc?.cca3 ? BUILT_IN_COUNTRY_DB[rc.cca3] : null);
+
+    const name = rc?.name?.common || builtin?.name || featureName || 'Unknown';
+
+    let centroid;
+    if (rc?.capitalInfo?.latlng?.length === 2){
+      centroid = [rc.capitalInfo.latlng[1], rc.capitalInfo.latlng[0]];
+    } else if (builtin?.capitalLatLng?.length === 2){
+      centroid = [builtin.capitalLatLng[1], builtin.capitalLatLng[0]];
+    } else {
+      centroid = d3.geoCentroid(feature);
+    }
+
+    if (!centroid || isNaN(centroid[0]) || isNaN(centroid[1])) return;
+
+    const base = staticToProfile(builtin);
+
+    const live = rc ? {
+      capital: rc.capital?.[0] || base?.capital || '—',
+      population: Number(rc.population) || base?.population || 0,
+      area: Number(rc.area) || base?.area || 0,
+      region: rc.region || base?.region || '—',
+      subregion: rc.subregion || base?.subregion || '—',
+      continent: rc.continents?.join(', ') || base?.continent || '—',
+      cca2: rc.cca2 || base?.cca2 || null,
+      cca3: rc.cca3 || base?.cca3 || null,
+      flag: rc.flags?.png || rc.flags?.svg || base?.flag || null,
+      flagAlt: rc.flags?.alt || base?.flagAlt || '',
+      coatOfArms: rc.coatOfArms?.png || rc.coatOfArms?.svg || null,
+      languages: rc.languages ? Object.values(rc.languages).join(', ') : base?.languages || '—',
+      currency: rc.currencies
+        ? Object.entries(rc.currencies)
+            .map(([code, cur]) => `${cur.name}${cur.symbol ? ` (${cur.symbol})` : ''} · ${code}`)
+            .join(', ')
+        : base?.currency || '—',
+      timezones: rc.timezones?.join(', ') || base?.timezones || '—',
+      tld: rc.tld?.join(', ') || base?.tld || '—',
+      driving: rc.car?.side || base?.driving || '—',
+      startOfWeek: rc.startOfWeek || base?.startOfWeek || 'monday',
+      capitalLatLng: rc.capitalInfo?.latlng || base?.capitalLatLng || null,
+      borders: Array.isArray(rc.borders) ? rc.borders.length : (base?.borders || 0),
+      unMember: !!rc.unMember,
+      independent: rc.independent !== false,
+      latlng: rc.latlng || base?.latlng || centroid,
+      idd: rc.idd?.root ? `${rc.idd.root}${rc.idd.suffixes?.[0] || ''}` : base?.idd || '—',
+      map: rc.maps?.googleMaps || base?.map || '#',
+      builtIn: false,
+      builtInSourceName: builtin?.name || name
+    } : base;
+
+    countries.push({
+      id: ccn3,
+      name,
+      feature,
+      centroid,
+      info: live
+    });
+  });
+
+  countries.sort((a,b) => a.name.localeCompare(b.name));
+
+  const available = countries.filter(c => c.info).length;
+  const sourceLabel = restOK ? 'BUILT-IN + LIVE' : 'BUILT-IN DATABASE';
+  $('explore-count').textContent = `${available} COUNTRY PROFILES // ${sourceLabel}`;
+}
+
+
+/* =========================================================
+   GLOBE (d3 orthographic SVG)
+========================================================= */
+function buildGlobe(topology){
+  projection = d3.geoOrthographic()
+    .translate([CFG.center, CFG.center])
+    .scale(currentScale)
+    .rotate(rotation)
+    .clipAngle(90);
+  geoPath = d3.geoPath(projection);
+
+  const objectKey = Object.keys(topology.objects)[0];
+  borderMesh = topojson.mesh(topology, topology.objects[objectKey], (a,b) => a !== b);
+  graticule = d3.geoGraticule10();
+
+  const landLayer = d3.select('#land-layer');
+  const paths = landLayer.selectAll('path.land-shape')
+    .data(countries, d => d.id)
+    .join('path')
+    .attr('class', 'land-shape')
+    .attr('data-id', d => d.id);
+
+  paths
+    .on('pointerenter', (event, d) => { if (appState==='explore' && !isFocusing) setHovered(d); })
+    .on('pointerleave', () => { if (appState==='explore') setHovered(null); })
+    .on('pointermove', (event) => { if (hoveredCountry) positionTooltip(event.clientX, event.clientY); })
+    .on('click', (event, d) => {
+      event.stopPropagation();
+      if (appState !== 'explore' || isFocusing) return;
+      selectCountry(d);
+    });
+
+  redrawGlobe();
+  bindGlobeInteractions();
+}
+
+
+function clearCapitalMarker(){
+  d3.select('#capital-layer').selectAll('*').remove();
+}
+
+function drawCapitalMarker(country){
+  clearCapitalMarker();
+  if (!country?.info?.capitalLatLng || !projection) return;
+
+  const [lat, lon] = country.info.capitalLatLng;
+  const xy = projection([lon, lat]);
+
+  // Only show marker when the capital is on the visible hemisphere.
+  const visible = d3.geoDistance([lon, lat], [-rotation[0], -rotation[1]]) <= Math.PI / 2 + 0.02;
+  if (!visible || !Number.isFinite(xy[0]) || !Number.isFinite(xy[1])) return;
+
+  const g = d3.select('#capital-layer')
+    .append('g')
+    .attr('class', 'capital-marker')
+    .attr('transform', `translate(${xy[0]},${xy[1]})`);
+
+  g.append('circle')
+    .attr('class','capital-ping')
+    .attr('r',3);
+
+  g.append('circle')
+    .attr('class','capital-core')
+    .attr('r',3.1);
+
+  const label = country.info.capital || 'Capital';
+  const labelX = 13;
+  const labelY = -10;
+
+  g.append('line')
+    .attr('class','capital-line')
+    .attr('x1',4).attr('y1',-3)
+    .attr('x2',labelX-3).attr('y2',labelY+2);
+
+  g.append('text')
+    .attr('class','capital-label')
+    .attr('x',labelX)
+    .attr('y',labelY)
+    .text(label.toUpperCase());
+}
+
+function redrawGlobe(){
+  if (!projection) return;
+  projection.rotate(rotation).scale(currentScale);
+  d3.select('#land-layer').selectAll('path.land-shape').attr('d', d => geoPath(d.feature));
+  d3.select('#border-path').attr('d', geoPath(borderMesh));
+  d3.select('#graticule-path').attr('d', geoPath(graticule));
+  if (selectedCountry) drawCapitalMarker(selectedCountry);
+}
+
+function setHovered(country){
+  if (country === hoveredCountry) return;
+  if (hoveredCountry){
+    d3.select(`.land-shape[data-id="${hoveredCountry.id}"]`).classed('hovered', false);
+  }
+  hoveredCountry = country;
+  if (country){
+    d3.select(`.land-shape[data-id="${country.id}"]`).classed('hovered', true);
+    showTooltip(country);
+    $('globe').style.cursor = 'pointer';
+  } else {
+    hideTooltip();
+    $('globe').style.cursor = 'grab';
+  }
+}
+
+/* =========================================================
+   TOOLTIP
+========================================================= */
+function showTooltip(country){
+  $('tooltip-name').textContent = country.name;
+  const img = $('tooltip-flag');
+  if (country.info && country.info.flag){ img.src = country.info.flag; img.style.display = 'block'; }
+  else { img.style.display = 'none'; }
+  $('tooltip').classList.add('show');
+}
+function positionTooltip(x, y){
+  const t = $('tooltip');
+  t.style.left = x + 'px';
+  t.style.top = y + 'px';
+}
+function hideTooltip(){ $('tooltip').classList.remove('show'); }
+
+/* =========================================================
+   DRAG / ZOOM INTERACTIONS
+========================================================= */
+function bindGlobeInteractions(){
+  const svg = $('globe');
+  let lastX = 0, lastY = 0, vx = 0, vy = 0, moved = 0, downX = 0, downY = 0;
+
+  // NOTE: deliberately no setPointerCapture here — capturing the pointer on
+  // the svg retargets the click event away from the country <path> that was
+  // actually pressed, which silently breaks click-to-select. Instead we track
+  // the drag with plain window listeners and only treat it as a "drag" (as
+  // opposed to a click) once the pointer has actually moved a few pixels.
+
+  function onMove(e){
+    if (!isDragging) return;
+    const dx = e.clientX - lastX, dy = e.clientY - lastY;
+    lastX = e.clientX; lastY = e.clientY;
+    vx = dx; vy = dy;
+    moved += Math.abs(dx) + Math.abs(dy);
+    if (moved > 3){
+      rotation[0] += dx * 0.35;
+      rotation[1] = Math.max(-90, Math.min(90, rotation[1] - dy * 0.35));
+      redrawGlobe();
+    }
+  }
+  function onUp(){
+    if (!isDragging) return;
+    isDragging = false;
+    window.removeEventListener('pointermove', onMove);
+    window.removeEventListener('pointerup', onUp);
+    if (moved > 3){
+      dragVelocity = Math.abs(vx);
+      momentumSpin(vx);
+    }
+    idleResumeTimer = setTimeout(() => { autoRotate = true; }, 1800);
+  }
+
+  svg.addEventListener('pointerdown', (e) => {
+    if (appState !== 'explore' || isFocusing) return;
+    isDragging = true; autoRotate = false; moved = 0;
+    clearTimeout(idleResumeTimer);
+    lastX = downX = e.clientX; lastY = downY = e.clientY;
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp);
+  });
+
+  // desktop wheel zoom
+  svg.addEventListener('wheel', (e) => {
+    if (appState !== 'explore' || isFocusing) return;
+    e.preventDefault();
+    currentScale = Math.max(CFG.minScale, Math.min(CFG.maxScale, currentScale - e.deltaY * 0.5));
+    redrawGlobe();
+  }, { passive:false });
+
+  // mobile pinch zoom
+  let pinchStartDist = null, pinchStartScale = currentScale;
+  svg.addEventListener('touchstart', (e) => {
+    if (e.touches.length === 2){
+      pinchStartDist = touchDist(e.touches);
+      pinchStartScale = currentScale;
+      autoRotate = false;
+    }
+  }, { passive:true });
+  svg.addEventListener('touchmove', (e) => {
+    if (e.touches.length === 2 && pinchStartDist){
+      const d = touchDist(e.touches);
+      const factor = d / pinchStartDist;
+      currentScale = Math.max(CFG.minScale, Math.min(CFG.maxScale, pinchStartScale * factor));
+      redrawGlobe();
+    }
+  }, { passive:true });
+  svg.addEventListener('touchend', (e) => {
+    if (e.touches.length < 2){ pinchStartDist = null; idleResumeTimer = setTimeout(() => { autoRotate = true; }, 1800); }
+  });
+
+  function touchDist(touches){
+    const dx = touches[0].clientX - touches[1].clientX;
+    const dy = touches[0].clientY - touches[1].clientY;
+    return Math.sqrt(dx*dx + dy*dy);
+  }
+}
+
+function momentumSpin(initialVX){
+  let v = initialVX;
+  function step(){
+    if (Math.abs(v) < 0.02 || isDragging || isFocusing) return;
+    rotation[0] += v * 0.35;
+    v *= 0.94;
+    redrawGlobe();
+    requestAnimationFrame(step);
+  }
+  step();
+}
+
+/* =========================================================
+   COUNTRY FOCUS / SELECTION
+========================================================= */
+
+function projectCountryToFocus(country){
+  const svg = document.getElementById('focus-country-svg');
+  const path = document.getElementById('focus-country-path');
+  const width = 900, height = 650;
+
+  // Fit the selected country's GeoJSON into a clean, centered white silhouette.
+  const bounds = d3.geoBounds(country.feature);
+  let lon0 = (bounds[0][0] + bounds[1][0]) / 2;
+  let lat0 = (bounds[0][1] + bounds[1][1]) / 2;
+
+  // Handle countries crossing the antimeridian.
+  if (Math.abs(bounds[1][0] - bounds[0][0]) > 180) lon0 += 180;
+
+  const focusProjection = d3.geoMercator()
+    .center([lon0, lat0])
+    .translate([width/2, height/2])
+    .scale(1);
+
+  const tempPath = d3.geoPath(focusProjection);
+  const tempD = tempPath(country.feature);
+
+  // Find the rendered bounds, then determine the exact fitting scale.
+  const tempSvg = d3.select('#focus-country-svg');
+  const temp = tempSvg.append('path').attr('d', tempD).style('visibility','hidden');
+  const bbox = temp.node().getBBox();
+  temp.remove();
+
+  const padX = 85, padY = 70;
+  const sx = (width - padX*2) / Math.max(bbox.width, 1);
+  const sy = (height - padY*2) / Math.max(bbox.height, 1);
+  const scaleFactor = Math.min(sx, sy);
+
+  const finalProjection = d3.geoMercator()
+    .center([lon0, lat0])
+    .translate([width/2 - (bbox.x + bbox.width/2 - width/2)*scaleFactor,
+                height/2 - (bbox.y + bbox.height/2 - height/2)*scaleFactor])
+    .scale(scaleFactor);
+
+  path.setAttribute('d', d3.geoPath(finalProjection)(country.feature));
+
+  // Capital marker uses exact capital coordinates.
+  const info = country.info;
+  if (info?.capitalLatLng?.length === 2){
+    const [lat, lon] = info.capitalLatLng;
+    const [x,y] = finalProjection([lon,lat]);
+    const dot = document.getElementById('focus-capital-dot');
+    const ring = document.getElementById('focus-capital-ring');
+    const line = document.getElementById('focus-capital-line');
+    const label = document.getElementById('focus-capital-label');
+    dot.setAttribute('cx',x); dot.setAttribute('cy',y);
+    ring.setAttribute('cx',x); ring.setAttribute('cy',y);
+    const labelRight = x < width * .58;
+    const lx = x + (labelRight ? 30 : -30);
+    const ly = y - 22;
+    line.setAttribute('x1',x); line.setAttribute('y1',y);
+    line.setAttribute('x2',lx + (labelRight ? -5 : 5)); line.setAttribute('y2',ly + 5);
+    label.setAttribute('x',lx); label.setAttribute('y',ly);
+    label.setAttribute('text-anchor',labelRight ? 'start' : 'end');
+    label.textContent = (info.capital || 'CAPITAL').toUpperCase();
+    [dot,ring,line,label].forEach(el => el.style.display='');
+  } else {
+    ['focus-capital-dot','focus-capital-ring','focus-capital-line','focus-capital-label']
+      .forEach(id => document.getElementById(id).style.display='none');
+  }
+}
+
+function openCountryFocus(country){
+  const info = country?.info || {};
+  $('focus-country-name').textContent = country.name.toUpperCase();
+  $('focus-iso').textContent = `${info.cca2 || '—'} · ${info.cca3 || '—'}`;
+  $('focus-continent').textContent = info.continent || info.region || 'WORLD';
+  $('focus-capital').textContent = info.capital || '—';
+  $('focus-population').textContent = info.population ? info.population.toLocaleString() : '—';
+  $('focus-area').textContent = info.area ? `${info.area.toLocaleString()} km²` : '—';
+  $('focus-region').textContent = `${info.region || '—'}${info.subregion ? ' · ' + info.subregion : ''}`;
+
+  projectCountryToFocus(country);
+
+  document.body.classList.add('focus-active');
+  const focus = $('country-focus');
+  focus.classList.remove('dive-in');
+  void focus.offsetWidth;
+  focus.classList.add('open', 'dive-in');
+  focus.setAttribute('aria-hidden','false');
+
+  // The country is already prepared behind the transition, so the scene
+  // reads as one continuous cinematic zoom rather than two separate pages.
+  const path = document.getElementById('focus-country-path');
+  path.style.transition = 'none';
+  path.style.transform = 'scale(1)';
+  path.style.opacity = '1';
+}
+
+function closeCountryFocus(){
+  const focus = $('country-focus');
+  focus.classList.remove('dive-in');
+  focus.classList.remove('open');
+  focus.setAttribute('aria-hidden','true');
+  document.body.classList.remove('focus-active');
+}
+
+
+function selectCountry(country){
+  if (selectedCountry){
+    d3.select(`.land-shape[data-id="${selectedCountry.id}"]`).classed('selected', false);
+  }
+
+  selectedCountry = country;
+  hideTooltip();
+  closeSuggestions();
+
+  // IMPORTANT: switch to the country scene immediately.
+  // No globe zoom/rotation animation happens first.
+  openCountryFocus(country);
+
+  // Keep the richer profile available when returning to the globe.
+  openInfoPanel(country);
+}
+
+function focusOnCountry(country){
+  isFocusing = true; autoRotate = false;
+  clearTimeout(idleResumeTimer);
+  const [lon, lat] = country.centroid;
+  const startRotate = rotation.slice();
+  const endRotate = [-lon, -lat, 0];
+  const startScale = currentScale;
+  const endScale = CFG.focusScale;
+
+  // shortest-path longitude interpolation
+  let dLon = endRotate[0] - startRotate[0];
+  dLon = ((dLon + 180) % 360 + 360) % 360 - 180;
+  const targetLon = startRotate[0] + dLon;
+
+  addTween({
+    duration: CFG.focusDuration,
+    onUpdate: (t) => {
+      rotation[0] = startRotate[0] + (targetLon - startRotate[0]) * t;
+      rotation[1] = startRotate[1] + (endRotate[1] - startRotate[1]) * t;
+      currentScale = startScale + (endScale - startScale) * t;
+      redrawGlobe();
+    },
+    onComplete: () => {
+      isFocusing = false;
+      drawCapitalMarker(country);
+    }
+  });
+}
+
+function openInfoPanel(country){
+  $('panel-name').textContent = country.name;
+  const info = country.info;
+
+  const set = (id, value) => { $(id).textContent = value ?? '—'; };
+
+  if (!info){
+    $('panel-flag').style.display = 'none';
+    set('panel-code', 'NO PROFILE');
+    set('panel-subtitle', 'Detailed data unavailable');
+    ['panel-capital','panel-population','panel-area','panel-continent','panel-region',
+     'panel-subregion','panel-languages','panel-currency','panel-tld','panel-timezones',
+     'panel-coordinates','panel-driving','panel-week'].forEach(id => set(id, '—'));
+    set('panel-borders', '—');
+    $('tag-member').classList.remove('active');
+    $('tag-independent').classList.remove('active');
+    $('panel-status').textContent = 'LIMITED';
+    $('panel-note').textContent = 'This territory is present in the globe geometry, but the live country database did not return a matching profile.';
+  } else {
+    $('panel-flag').src = info.flag || '';
+    $('panel-flag').alt = info.flagAlt || `${country.name} flag`;
+    $('panel-flag').style.display = info.flag ? 'block' : 'none';
+
+    set('panel-code', `${info.cca2 || '—'} · ${info.cca3 || '—'} · ID ${country.id}`);
+    set('panel-subtitle', `${info.subregion || info.region || 'World'} · ${info.continent || '—'}`);
+    set('panel-capital', info.capital);
+    set('panel-population', info.population ? info.population.toLocaleString() : '—');
+    set('panel-area', info.area ? `${info.area.toLocaleString()} km²` : '—');
+    set('panel-continent', info.continent);
+    set('panel-region', info.region);
+    set('panel-subregion', info.subregion);
+    set('panel-languages', info.languages);
+    set('panel-currency', info.currency);
+    set('panel-tld', info.tld);
+    set('panel-timezones', info.timezones);
+    set('panel-coordinates', info.latlng?.length === 2 ? `${info.latlng[1].toFixed(2)}°, ${info.latlng[0].toFixed(2)}°` : '—');
+    set('panel-driving', info.driving === 'left' ? 'LEFT' : info.driving === 'right' ? 'RIGHT' : info.driving);
+    set('panel-week', info.startOfWeek);
+    set('panel-borders', `${info.borders} neighboring state${info.borders === 1 ? '' : 's'}`);
+    $('tag-member').classList.toggle('active', info.unMember);
+    $('tag-independent').classList.toggle('active', info.independent);
+    $('panel-status').textContent = info.unMember ? 'UN MEMBER' : (info.independent ? 'INDEPENDENT' : 'TERRITORY');
+    $('panel-note').textContent = info.builtIn
+      ? `Calling code: ${info.idd}. This profile is stored directly inside the HTML.`
+      : `Calling code: ${info.idd}. The built-in profile is enhanced with live data when online.`;
+    const map = $('panel-map');
+    map.href = info.map || '#';
+    map.style.pointerEvents = info.map && info.map !== '#' ? 'auto' : 'none';
+  }
+
+  $('info-panel').classList.add('open');
+  if (info?.capitalLatLng) drawCapitalMarker(country);
+}
+function closeInfoPanel(){
+  $('info-panel').classList.remove('open');
+  if (selectedCountry){ d3.select(`.land-shape[data-id="${selectedCountry.id}"]`).classed('selected', false); }
+  selectedCountry = null;
+  clearCapitalMarker();
+  hideTooltip();
+}
+
+function resetView(){
+  closeInfoPanel();
+  $('hint-panel').classList.remove('show');
+  isFocusing = true; autoRotate = false;
+  clearTimeout(idleResumeTimer);
+  const startRotate = rotation.slice();
+  const endRotate = CFG.defaultRotate.slice();
+  const startScale = currentScale;
+  const endScale = CFG.baseScale;
+  addTween({
+    duration: 1100,
+    onUpdate: (t) => {
+      rotation[0] = startRotate[0] + (endRotate[0] - startRotate[0]) * t;
+      rotation[1] = startRotate[1] + (endRotate[1] - startRotate[1]) * t;
+      currentScale = startScale + (endScale - startScale) * t;
+      redrawGlobe();
+    },
+    onComplete: () => { isFocusing = false; autoRotate = true; }
+  });
+}
+
+/* =========================================================
+   SEARCH
+========================================================= */
+let suggestionIndex = -1, currentSuggestions = [];
+function handleSearchInput(){
+  const val = $('search-input').value.trim().toLowerCase();
+  const box = $('suggestions');
+  if (!val){ closeSuggestions(); return; }
+  currentSuggestions = countries
+    .filter(c => {
+      const hay = [
+        c.name,
+        c.info?.capital,
+        c.info?.cca2,
+        c.info?.cca3,
+        c.info?.continent,
+        c.info?.region,
+        c.info?.subregion
+      ].filter(Boolean).join(' ').toLowerCase();
+      return hay.includes(val);
+    })
+    .sort((a,b) => {
+      const aName = a.name.toLowerCase(), bName = b.name.toLowerCase();
+      return (aName.startsWith(val) ? -1 : 0) - (bName.startsWith(val) ? -1 : 0) || aName.localeCompare(bName);
+    })
+    .slice(0, 10);
+  suggestionIndex = -1;
+  if (!currentSuggestions.length){ closeSuggestions(); return; }
+  box.innerHTML = currentSuggestions.map((c, i) => `
+    <div class="suggestion-item" data-idx="${i}">
+      ${c.info && c.info.flag ? `<img src="${c.info.flag}" alt="">` : ''}
+      <span>${c.name}</span>
+    </div>`).join('');
+  box.classList.add('show');
+  Array.from(box.children).forEach((el, i) => el.addEventListener('click', () => selectSuggestion(i)));
+}
+function closeSuggestions(){
+  $('suggestions').classList.remove('show');
+  $('suggestions').innerHTML = '';
+  currentSuggestions = []; suggestionIndex = -1;
+}
+function selectSuggestion(i){
+  const country = currentSuggestions[i];
+  if (!country) return;
+  $('search-input').value = country.name;
+  closeSuggestions();
+  selectCountry(country);
+}
+function handleSearchKeydown(e){
+  const items = Array.from($('suggestions').children);
+  if (!items.length) return;
+  if (e.key === 'ArrowDown'){ e.preventDefault(); suggestionIndex = Math.min(items.length-1, suggestionIndex+1); }
+  else if (e.key === 'ArrowUp'){ e.preventDefault(); suggestionIndex = Math.max(0, suggestionIndex-1); }
+  else if (e.key === 'Enter'){ e.preventDefault(); if (suggestionIndex >= 0) selectSuggestion(suggestionIndex); return; }
+  else if (e.key === 'Escape'){ closeSuggestions(); return; }
+  else return;
+  items.forEach((el, i) => el.classList.toggle('active', i === suggestionIndex));
+}
+
+/* =========================================================
+   INTRO / TRANSITIONS
+========================================================= */
+function startIntroSequence(){
+  appState = 'intro';
+  $('loading-screen').classList.add('hidden');
+  requestAnimationFrame(() => { $('globe-stage').classList.add('revealed'); });
+  setTimeout(() => {
+    appState = 'start';
+    $('start-overlay').classList.add('visible');
+  }, CFG.introDuration);
+}
+
+function beginExploration(){
+  if (appState !== 'start') return;
+  appState = 'entering';
+  $('start-overlay').classList.remove('visible');
+  $('globe-stage').classList.add('entering');
+  setTimeout(() => {
+    appState = 'explore';
+    $('ui-layer').classList.add('visible');
+  }, CFG.enterDuration);
+}
+
+/* =========================================================
+   MAIN LOOP (idle auto-rotation)
+========================================================= */
+function animate(now){
+  requestAnimationFrame(animate);
+  const delta = Math.min(0.05, (now - lastFrame) / 1000);
+  lastFrame = now;
+  stepTweens();
+
+  if (projection){
+    if ((appState === 'intro' || appState === 'start' || appState === 'entering') ){
+      rotation[0] += delta * 4.2;
+      redrawGlobe();
+    } else if (appState === 'explore' && autoRotate && !isDragging && !isFocusing){
+      rotation[0] += delta * 3.2;
+      redrawGlobe();
+    }
+  }
+}
+
+/* =========================================================
+   UI BINDINGS
+========================================================= */
+function bindUI(){
+  $('cta-btn').addEventListener('click', beginExploration);
+  $('panel-close').addEventListener('click', closeInfoPanel);
+  $('focus-close').addEventListener('click', () => {
+    closeCountryFocus();
+    closeInfoPanel();
+    resetView();
+  });
+  $('btn-reset').addEventListener('click', () => {
+    closeCountryFocus();
+    resetView();
+  });
+  $('btn-search').addEventListener('click', () => {
+    $('search-input').focus();
+    $('search-input').select();
+  });
+  $('btn-random').addEventListener('click', () => {
+    const pool = countries.filter(c => c.info);
+    if (!pool.length) return;
+    selectCountry(pool[Math.floor(Math.random() * pool.length)]);
+  });
+  $('panel-random').addEventListener('click', () => {
+    const pool = countries.filter(c => c.info);
+    if (!pool.length) return;
+    selectCountry(pool[Math.floor(Math.random() * pool.length)]);
+  });
+  $('btn-info').addEventListener('click', () => $('hint-panel').classList.toggle('show'));
+  $('search-input').addEventListener('input', handleSearchInput);
+  $('search-input').addEventListener('keydown', handleSearchKeydown);
+  document.addEventListener('click', (e) => {
+    if (!$('search-wrap').contains(e.target)) closeSuggestions();
+  });
+}
+
+/* =========================================================
+   BOOTSTRAP
+========================================================= */
+async function boot(){
+  initStarfield();
+  bindUI();
+  requestAnimationFrame(animate);
+  try {
+    await loadData();
+  } catch(err){
+    showErrorBanner('An unexpected error occurred while building the world.');
+  }
+  setTimeout(startIntroSequence, 350);
+}
+boot();
+</script>
+</body>
+</html>
